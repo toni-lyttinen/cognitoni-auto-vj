@@ -3,7 +3,12 @@
 void ofApp::setup() {
 	ofSetBackgroundAuto(false); // Tell oF not to clear the screen automatically
 
-	shader.load("shader.vert", "shader.frag");
+	bool success = shader.load("shader.vert", "shader.frag");
+	if (success) {
+		ofLogNotice() << "SUCCESS: Shaders are live!";
+	} else {
+		ofLogError() << "FAILURE: Shaders still missing from bundle.";
+	}
 
 	gui.setup("Auto VJ Setup");
 
@@ -21,11 +26,14 @@ void ofApp::setup() {
 
 	// **list devices here as radio buttons**
 	#ifdef TARGET_OSX
-		currentApi = ofSoundDevice::Api::APPLE_CORE_AUDIO;
+		currentApi = ofSoundDevice::Api::OSX_CORE;
 	#else
 		currentApi = ofSoundDevice::Api::MS_WASAPI;
 	#endif
-
+	
+	fft = ofxFft::create(1024, OF_FFT_WINDOW_HAMMING);
+	fftBins.resize(fft->getBinSize());
+	
 	sldAudioGain = 1.0f; // default value 1.0
 
 	auto devices = soundStream.getDeviceList(currentApi);
@@ -47,6 +55,7 @@ void ofApp::setup() {
 	// Handlers
 	btnSelectFolder.addListener(this, &ofApp::selectFolderPressed);
 	btnStart.addListener(this, &ofApp::startPressed);
+	
 }
 
 void ofApp::selectFolderPressed() {
@@ -130,23 +139,40 @@ void ofApp::startPressed() {
 
 	ofSoundStreamSettings settings;
 	settings.setApi(currentApi);
-	settings.setInDevice(inputs[selectedDeviceID]);
-	settings.setInListener(this);
-	settings.sampleRate = 44100;
-	settings.numInputChannels = 1;
-	settings.bufferSize = 1024;
+	
+	// Safety check for the index
+		if(selectedDeviceID >= 0 && selectedDeviceID < inputs.size()) {
+			settings.setInDevice(inputs[selectedDeviceID]);
+			
+			// MAC FIX: Match the hardware exactly
+			#ifdef TARGET_OSX
+				settings.sampleRate = inputs[selectedDeviceID].sampleRates[0]; // Use whatever the Mac prefers
+				settings.numInputChannels = inputs[selectedDeviceID].inputChannels;
+			#else
+				settings.sampleRate = 44100;
+				settings.numInputChannels = 1;
+			#endif
+		}
+
+		settings.setInListener(this);
+		settings.bufferSize = 1024;
 
 	if (soundStream.setup(settings)) {
 		loadRandomVideo();
 		isLive = true;
+	} else {
+		ofSystemAlertDialog("Audio Hardware Error: Try selecting a different device.");
 	}
 }
 
 void ofApp::audioIn(ofSoundBuffer & input) {
+	fft->setSignal(input.getBuffer());
+	float* analyzerBuffer = fft->getAmplitude();
+	int numBins = fft->getBinSize();
+	
 	float s = 0, lm = 0, m = 0, hm = 0, t = 0;
-	int numFrames = input.getNumFrames();
 	int sampleRate = input.getSampleRate();
-	float binSize = (float)sampleRate / (float)numFrames;
+	float binSize = (float)sampleRate / (float)input.size();
 
 	int subCutoff = 150 / binSize;
 	int lowMidCut = 350 / binSize;
@@ -155,8 +181,17 @@ void ofApp::audioIn(ofSoundBuffer & input) {
 
 	int counts[5] = { 0, 0, 0, 0, 0 };
 
-	for (size_t i = 0; i < numFrames; i++) {
-		float sample = abs(input[i] * (float)sldAudioGain);
+	for (int i = 0; i < numBins; i++) {
+		#ifdef TARGET_OSX
+			float osxBoost = 5.0f;
+		#else
+			float osxBoost = 1.0f;
+		#endif
+		
+		// NEW: FREQUENCY TILT
+		// Higher frequencies (higher i) get a bigger boost to counter natural energy drop-off
+		float tilt = 1.0f + ((float)i / (float)numBins) * 10.0f;
+		float sample = analyzerBuffer[i] * (float)sldAudioGain * osxBoost * 25.0f * tilt;
 
 		if (i <= subCutoff) {
 			s += sample;
@@ -177,11 +212,12 @@ void ofApp::audioIn(ofSoundBuffer & input) {
 	}
 
 	// --- Softened Band Calculations ---
+	// Added unique multipliers to each band to "level the playing field"
 	subBass = ofLerp(subBass, (s / max(1, counts[0])) * 1.0f, 0.1f);
-	lowMids = ofLerp(lowMids, (lm / max(1, counts[1])) * 1.0f, 0.1f);
-	mids = ofLerp(mids, (m / max(1, counts[2])) * 1.0f, 0.1f);
-	highMids = ofLerp(highMids, (hm / max(1, counts[3])) * 1.0f, 0.1f);
-	treble = ofLerp(treble, (t / max(1, counts[4])) * 1.0f, 0.1f);
+	lowMids = ofLerp(lowMids, (lm / max(1, counts[1])) * 1.8f, 0.1f);
+	mids = ofLerp(mids, (m / max(1, counts[2])) * 2.5f, 0.1f);
+	highMids = ofLerp(highMids, (hm / max(1, counts[3])) * 4.0f, 0.1f);
+	treble = ofLerp(treble, (t / max(1, counts[4])) * 6.0f, 0.1f);
 }
 
 void ofApp::update() {
@@ -207,7 +243,15 @@ void ofApp::update() {
 		// Instead of jumping, smoothedHue "chases" the target hueValue
 		smoothedHue = ofLerp(smoothedHue, hueValue, 0.05f);
 
-		if (video.getIsMovieDone()) {
+		// Check if we are within 1% of the end of the video
+		if (video.getPosition() > 0.99f) {
+			// stop the video first to release the drive's read-head
+			video.stop();
+			video.close();
+			
+			// Wait just a few milliseconds for the OS to catch up and finish handshake
+			ofSleepMillis(10);
+			
 			loadRandomVideo();
 		}
 	}
@@ -244,6 +288,8 @@ void ofApp::draw() {
 	ofScale(zoomValue * bounceScale, zoomValue * bounceScale);
 
 	shader.begin();
+	// ensure the shader uses the fresh video texture
+	shader.setUniformTexture("tex0", video.getTexture(), 0);
 	shader.setUniform1f("time", ofGetElapsedTimef());
 
 	// AGGRESSIVE UNIFORM MAPPING
@@ -279,7 +325,10 @@ void ofApp::draw() {
 				0, i * (video.getHeight() / numSlices));
 		}
 	} else {
-		video.draw(-ofGetWidth() / 2, -ofGetHeight() / 2, ofGetWidth(), ofGetHeight());
+		// CLEANER DRAW FOR MAC
+		ofSetColor(255);
+		// We are already translated to center, so we draw from top-left offset
+		video.getTexture().draw(-ofGetWidth()/2, -ofGetHeight()/2, ofGetWidth(), ofGetHeight());
 	}
 	shader.end();
 
@@ -383,24 +432,27 @@ void ofApp::mouseDragged(int x, int y, int button) {
 void ofApp::loadRandomVideo() {
 	if (!videoFiles.empty()) {
 		int idx = floor(ofRandom(videoFiles.size()));
-
-		// 1. Force a clean slate
+		
 		video.stop();
 		video.close();
 
-		// 2. Load with optimized settings
-		video.setPixelFormat(OF_PIXELS_NATIVE);
+		#ifdef TARGET_OSX
+			video.setPixelFormat(OF_PIXELS_RGB);
+		#else
+			video.setPixelFormat(OF_PIXELS_NATIVE);
+		#endif
 
 		if (video.load(videoFiles[idx])) {
 			video.setLoopState(OF_LOOP_NORMAL);
 			video.play();
-			video.setVolume(0.0f); // Mute video audio
-
-			// 3. Force one update immediately to "warm up" the texture
-			// This prevents the shader from hitting a NULL texture on the first frame
+			video.setVolume(0.0f);
+			
+			// FORCE the video to the first frame and update twice
+			video.firstFrame();
+			video.update();
 			video.update();
 
-			ofLogNotice() << "Loaded " << videoFiles[idx] << " @ 360p";
+			ofLogNotice() << "SWITCHED TO: " << videoFiles[idx];
 		}
 	}
 }

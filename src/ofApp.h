@@ -1,6 +1,7 @@
 #pragma once
 #include "ofMain.h"
 #include "ofxGui.h"
+#include "ofxFft.h"
 
 class ofApp : public ofBaseApp {
 public:
@@ -34,6 +35,8 @@ public:
 	ofSoundDevice::Api currentApi;
 	ofSoundStream soundStream;
 	ofShader shader;
+	ofxFft* fft; // You may need the ofxFft addon, or use ofSoundStream's internal if available
+	vector<float> fftBins;
 
 	// Frequencies (Used by Shader & Draw)
 	float subBass; // Deep thumps

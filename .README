@@ -1,0 +1,12 @@
+
+
+MacOSX setup:
+- Install Visual Studio Code
+- Install OpenFrameworks
+- Unpack OpenFrameworks
+- Move Project generator out and back
+- Install ofxFft, ofxJSON, ofxPostProcessing
+- Import project via projectGenerator
+- Open in IDE
+- Add Xcode permissions for disk (maybe)
+- copy shaders to bin/data/ of project folder
