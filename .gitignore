@@ -361,3 +361,38 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+######### My additions #########
+
+# --- openFrameworks / Compiled Binaries ---
+bin/*
+!bin/data/
+# Keep shaders even if they are in bin/data/
+!bin/data/*.frag
+!bin/data/*.vert
+
+# --- macOS / Xcode ---
+.DS_Store
+build/
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+*.xcworkspace/
+*.xcuserdata/
+DerivedData/
+
+# --- Windows / Visual Studio ---
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.db
+*.opendb
+Debug/
+Release/
+x64/
+
+# --- Local Configuration ---
+settings.json
+obj/

@@ -171,9 +171,13 @@ void ofApp::audioIn(ofSoundBuffer & input) {
 	int numBins = fft->getBinSize();
 	
 	float s = 0, lm = 0, m = 0, hm = 0, t = 0;
+	
+	// Use the actual buffer rate to keep math accurate
 	int sampleRate = input.getSampleRate();
-	float binSize = (float)sampleRate / (float)input.size();
+	// Frequency per bin = SampleRate / (N_FFT)
+	float binSize = (float)sampleRate / (float)(numBins * 2);
 
+	// Calculate indices dynamically to match frequency targets
 	int subCutoff = 150 / binSize;
 	int lowMidCut = 350 / binSize;
 	int midCut = 1000 / binSize;
@@ -221,38 +225,52 @@ void ofApp::audioIn(ofSoundBuffer & input) {
 }
 
 void ofApp::update() {
-	if (isLive && video.isLoaded()) {
+	if (!isLive) return;
 
-		// Countdown the strobe timer (decreases every frame)
-		if (strobeTimer > 0) strobeTimer -= 0.1f;
+	video.update();
 
-		// Trigger/Reset the timer on a strong kick
-		float impactDelta = std::max(0.0f, lowMids - (smoothedLowMids + 0.1f));
-		if (impactDelta > 0.45f) {
-			strobeTimer = 1.0f; // This will keep the strobe alive for about 10 frames
-		}
-		video.update();
+	// Visual Smoothing Math
+	if (strobeTimer > 0) strobeTimer -= 0.1f;
+	float impactDelta = std::max(0.0f, lowMids - (smoothedLowMids + 0.1f));
+	if (impactDelta > 0.45f) strobeTimer = 1.0f;
 
-		// Zoom Logic
-		smoothedLowMids = ofLerp(smoothedLowMids, lowMids, 0.05f);
-		float delta = std::max(0.0f, lowMids - (smoothedLowMids + 0.1f));
-		float targetZoom = 1.0f + (delta * 15.0f);
-		zoomValue = ofLerp(zoomValue, targetZoom, 0.3f);
+	smoothedLowMids = ofLerp(smoothedLowMids, lowMids, 0.05f);
+	zoomValue = ofLerp(zoomValue, 1.0f + (impactDelta * 15.0f), 0.3f);
+	smoothedHue = ofLerp(smoothedHue, hueValue, 0.05f);
 
-		// Low Pass Hue (Color Smoothing)
-		// Instead of jumping, smoothedHue "chases" the target hueValue
-		smoothedHue = ofLerp(smoothedHue, hueValue, 0.05f);
-
-		// Check if we are within 1% of the end of the video
-		if (video.getPosition() > 0.99f) {
-			// stop the video first to release the drive's read-head
-			video.stop();
-			video.close();
-			
-			// Wait just a few milliseconds for the OS to catch up and finish handshake
-			ofSleepMillis(10);
-			
+	// 1. IF WE ARE WAITING FOR A LOAD
+	if (bPendingLoad) {
+		// Only trigger the load if we aren't already in the middle of one
+		if (!bIsLoading) {
 			loadRandomVideo();
+		}
+		return; // Don't do anything else until this is resolved
+	}
+
+	// 2. MONITOR LOADING STATUS
+	if (bIsLoading) {
+		if (video.isLoaded()) {
+			video.play();
+			video.setLoopState(OF_LOOP_NORMAL);
+			bIsLoading = false;
+			// The "Gate" is now open for future loads
+		}
+		return; // Safety exit
+	}
+
+	// 3. REGULAR PLAYBACK & END-OF-VIDEO CHECK
+	if (video.isLoaded() && video.isPlaying()) {
+		
+		int currentFrame = video.getCurrentFrame();
+		int totalFrames = video.getTotalNumFrames();
+
+		// Trigger new video load when we are 2 frames from the actual end
+		if (currentFrame >= totalFrames - 2 && totalFrames > 0) {
+			ofLogNotice() << "FRAME TRIGGER: " << currentFrame << " / " << totalFrames;
+			
+			video.stop();
+			
+			bPendingLoad = true;
 		}
 	}
 }
@@ -262,6 +280,13 @@ void ofApp::draw() {
 		ofSetBackgroundAuto(true);
 		ofBackground(40);
 		gui.draw();
+		return;
+	}
+	
+	// Check if we are ready. If not, draw black and stop.
+	if (!video.isLoaded() || !video.getTexture().isAllocated()) {
+		ofSetBackgroundAuto(true);
+		ofBackground(0);
 		return;
 	}
 
@@ -430,29 +455,17 @@ void ofApp::mouseDragged(int x, int y, int button) {
 }
 
 void ofApp::loadRandomVideo() {
-	if (!videoFiles.empty()) {
-		int idx = floor(ofRandom(videoFiles.size()));
-		
-		video.stop();
-		video.close();
+	if (bIsLoading || videoFiles.empty()) return;
 
-		#ifdef TARGET_OSX
-			video.setPixelFormat(OF_PIXELS_RGB);
-		#else
-			video.setPixelFormat(OF_PIXELS_NATIVE);
-		#endif
-
-		if (video.load(videoFiles[idx])) {
-			video.setLoopState(OF_LOOP_NORMAL);
-			video.play();
-			video.setVolume(0.0f);
-			
-			// FORCE the video to the first frame and update twice
-			video.firstFrame();
-			video.update();
-			video.update();
-
-			ofLogNotice() << "SWITCHED TO: " << videoFiles[idx];
-		}
-	}
+	bIsLoading = true;
+	bPendingLoad = false;
+	int idx = floor(ofRandom(videoFiles.size()));
+	
+	#ifdef TARGET_OSX
+		video.loadAsync(videoFiles[idx]);
+	#else
+		video.load(videoFiles[idx]);
+	#endif
+	
+	ofLogNotice() << "STARTING ASYNC LOAD: " << videoFiles[idx];
 }

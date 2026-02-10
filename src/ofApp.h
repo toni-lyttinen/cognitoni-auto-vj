@@ -51,6 +51,9 @@ public:
 	// Video Handling
 	ofVideoPlayer video;
 	vector<string> videoFiles;
+	bool bNeedsNewVideo = false;
+	bool bIsLoading = false;
+	bool bPendingLoad = false;
 	void loadRandomVideo();
 	float zoomValue = 1.0f;
 	float strobeTimer = 0.0f;
