@@ -9,6 +9,7 @@ public:
 	void update();
 	void draw();
 	void drawVisualizerHUD();
+	void drawEventCredits();
 	void mousePressed(int x, int y, int button);
 	void mouseDragged(int x, int y, int button);
 	void audioIn(ofSoundBuffer & input);

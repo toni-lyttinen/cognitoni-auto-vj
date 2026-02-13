@@ -10,7 +10,7 @@ void ofApp::setup() {
 		ofLogError() << "FAILURE: Shaders still missing from bundle.";
 	}
 
-	gui.setup("Auto VJ Setup");
+	gui.setup("Cognitoni Auto VJ");
 
 	// Select Folder (Button)
 	gui.add(btnSelectFolder.setup("1. Select Video Folder"));
@@ -186,11 +186,8 @@ void ofApp::audioIn(ofSoundBuffer & input) {
 	int counts[5] = { 0, 0, 0, 0, 0 };
 
 	for (int i = 0; i < numBins; i++) {
-		#ifdef TARGET_OSX
-			float osxBoost = 5.0f;
-		#else
-			float osxBoost = 1.0f;
-		#endif
+		// Might need this for specific OS later
+		float osxBoost = 1.0f;
 		
 		// NEW: FREQUENCY TILT
 		// Higher frequencies (higher i) get a bigger boost to counter natural energy drop-off
@@ -373,6 +370,22 @@ void ofApp::draw() {
 	// 10. HUD & GUI (Menu Logic)
 	drawVisualizerHUD();
 	gui.draw();
+	drawEventCredits(); // credits
+}
+
+void ofApp::drawEventCredits() {
+	ofPushStyle();
+	ofPushMatrix();
+	
+	ofTranslate(ofGetWidth() - 270, 30);
+
+	ofScale(1.5, 1.5);
+	
+	ofDrawBitmapStringHighlight("Visual tool by @cognitoni", 0, 0, ofColor(0, 200), ofColor(255));
+	ofDrawBitmapStringHighlight("Video selection by @kreolis", 0, 20, ofColor(0, 200), ofColor(255));
+	
+	ofPopMatrix();
+	ofPopStyle();
 }
 
 void ofApp::drawVisualizerHUD() {
