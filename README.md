@@ -1,5 +1,11 @@
 # ⚡ Cognitoni Auto VJ - Real-time Audio Visualizer
 
+
+
+https://github.com/user-attachments/assets/3f1e9de5-d62e-4fac-959c-5831c84a2d86
+
+
+
 An aggressive, shader-based video manipulation engine built with **openFrameworks**. This tool transforms standard video libraries into high-energy visuals by mapping real-time FFT frequency data to complex GLSL mosh patterns and geometric displacements.
 
 ---
