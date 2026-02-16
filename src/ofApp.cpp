@@ -248,27 +248,19 @@ void ofApp::update() {
 	if (bIsLoading) {
 		if (video.isLoaded()) {
 			video.play();
-			video.setLoopState(OF_LOOP_NORMAL);
+			// CHANGE THIS: Set to NONE so getIsMovieDone() can trigger
+			video.setLoopState(OF_LOOP_NONE);
 			bIsLoading = false;
-			// The "Gate" is now open for future loads
 		}
-		return; // Safety exit
+		return;
 	}
 
 	// 3. REGULAR PLAYBACK & END-OF-VIDEO CHECK
-	if (video.isLoaded() && video.isPlaying()) {
+	if (video.isLoaded() && video.getIsMovieDone()) {
+		ofLogNotice() << "MOVIE DONE TRIGGER";
 		
-		int currentFrame = video.getCurrentFrame();
-		int totalFrames = video.getTotalNumFrames();
-
-		// Trigger new video load when we are 2 frames from the actual end
-		if (currentFrame >= totalFrames - 2 && totalFrames > 0) {
-			ofLogNotice() << "FRAME TRIGGER: " << currentFrame << " / " << totalFrames;
-			
-			video.stop();
-			
-			bPendingLoad = true;
-		}
+		video.stop();
+		bPendingLoad = true;
 	}
 }
 
@@ -469,6 +461,10 @@ void ofApp::mouseDragged(int x, int y, int button) {
 
 void ofApp::loadRandomVideo() {
 	if (bIsLoading || videoFiles.empty()) return;
+	
+	// Force the hardware decoder to release the last file
+	video.stop();
+	video.close();
 
 	bIsLoading = true;
 	bPendingLoad = false;
