@@ -367,18 +367,41 @@ FodyWeavers.xsd
 # --- openFrameworks / Compiled Binaries ---
 bin/*
 !bin/data/
-# Keep shaders even if they are in bin/data/
 !bin/data/*.frag
 !bin/data/*.vert
+!bin/data/*.glsl
+obj/
+*.o
+*.a
+*.lib
+
+# --- Compiled Application bundles ---
+*.app/
+dist/
 
 # --- macOS / Xcode ---
 .DS_Store
 build/
-*.xcodeproj/*
-!*.xcodeproj/project.pbxproj
-*.xcworkspace/
-*.xcuserdata/
 DerivedData/
+*.xcworkspace/
+xcuserdata/
+*.xcuserdata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xcworkspace/xcuserdata/
+*.xcworkspace/xcshareddata/xcschemes/
+.Xcode.env
+.xcode.env
+xcodebuild.log
+
+# Xcode project files (keep project.pbxproj only)
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcshareddata/xcschemes/*.xcscheme
+# But keep the project file itself
+!*.xcodeproj/project.pbxproj
 
 # --- Windows / Visual Studio ---
 .vs/
@@ -396,3 +419,11 @@ x64/
 # --- Local Configuration ---
 settings.json
 obj/
+
+# --- Keep Important Project Files ---
+# These SHOULD be committed to GitHub even though xcode created them
+# !cognitoni-auto-vj.xcodeproj/project.pbxproj
+# !addons.make
+# !Makefile
+# !config.make
+# !Project.xcconfig
