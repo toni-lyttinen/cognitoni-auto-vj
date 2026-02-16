@@ -402,7 +402,6 @@ void ofApp::drawEventCredits() {
 	ofScale(1.5, 1.5);
 	
 	ofDrawBitmapStringHighlight("Visual tool by @cognitoni", 0, 0, ofColor(0, 200), ofColor(255));
-	ofDrawBitmapStringHighlight("Video selection by @kreolis", 0, 20, ofColor(0, 200), ofColor(255));
 	
 	ofPopMatrix();
 	ofPopStyle();
