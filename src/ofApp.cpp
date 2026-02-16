@@ -144,9 +144,9 @@ void ofApp::startPressed() {
 		if(selectedDeviceID >= 0 && selectedDeviceID < inputs.size()) {
 			settings.setInDevice(inputs[selectedDeviceID]);
 			
-			// MAC FIX: Match the hardware exactly
+			// Match the hardware settings exactly
 			#ifdef TARGET_OSX
-				settings.sampleRate = inputs[selectedDeviceID].sampleRates[0]; // Use whatever the Mac prefers
+				settings.sampleRate = inputs[selectedDeviceID].sampleRates[0]; // Use device defaults
 				settings.numInputChannels = inputs[selectedDeviceID].inputChannels;
 			#else
 				settings.sampleRate = 44100;
@@ -186,11 +186,9 @@ void ofApp::audioIn(ofSoundBuffer & input) {
 	int counts[5] = { 0, 0, 0, 0, 0 };
 
 	for (int i = 0; i < numBins; i++) {
-		// Might need this for specific OS later
 		float osxBoost = 1.0f;
 		
-		// NEW: FREQUENCY TILT
-		// Higher frequencies (higher i) get a bigger boost to counter natural energy drop-off
+		// Apply frequency tilt to counter natural energy drop-off in higher frequencies
 		float tilt = 1.0f + ((float)i / (float)numBins) * 10.0f;
 		float sample = analyzerBuffer[i] * (float)sldAudioGain * osxBoost * 25.0f * tilt;
 
@@ -212,8 +210,7 @@ void ofApp::audioIn(ofSoundBuffer & input) {
 		}
 	}
 
-	// --- Softened Band Calculations ---
-	// Added unique multipliers to each band to "level the playing field"
+	// Blend band values with unique multipliers per frequency range
 	subBass = ofLerp(subBass, (s / max(1, counts[0])) * 1.0f, 0.1f);
 	lowMids = ofLerp(lowMids, (lm / max(1, counts[1])) * 1.8f, 0.1f);
 	mids = ofLerp(mids, (m / max(1, counts[2])) * 2.5f, 0.1f);
@@ -248,7 +245,7 @@ void ofApp::update() {
 	if (bIsLoading) {
 		if (video.isLoaded()) {
 			video.play();
-			// CHANGE THIS: Set to NONE so getIsMovieDone() can trigger
+			// Set to NONE so getIsMovieDone() can trigger for next video
 			video.setLoopState(OF_LOOP_NONE);
 			bIsLoading = false;
 		}
@@ -302,11 +299,11 @@ void ofApp::draw() {
 	ofScale(zoomValue * bounceScale, zoomValue * bounceScale);
 
 	shader.begin();
-	// ensure the shader uses the fresh video texture
+	// Bind video texture and elapsed time to shader
 	shader.setUniformTexture("tex0", video.getTexture(), 0);
 	shader.setUniform1f("time", ofGetElapsedTimef());
 
-	// AGGRESSIVE UNIFORM MAPPING
+	// Map audio frequencies to shader parameters
 	shader.setUniform1f("pixelSize", ofMap(treble, 0.4, 1.0, 1.0, 8.0, true));
 	shader.setUniform1f("rgbShift", subBass * 8.0 + (impactDelta * 120.0));
 	shader.setUniform1f("impactDelta", impactDelta);
@@ -339,9 +336,9 @@ void ofApp::draw() {
 				0, i * (video.getHeight() / numSlices));
 		}
 	} else {
-		// CLEANER DRAW FOR MAC
-		ofSetColor(255);
-		// We are already translated to center, so we draw from top-left offset
+			// Draw full texture centered
+			ofSetColor(255);
+			// Already translated to center, so offset from center point
 		video.getTexture().draw(-ofGetWidth()/2, -ofGetHeight()/2, ofGetWidth(), ofGetHeight());
 	}
 	shader.end();

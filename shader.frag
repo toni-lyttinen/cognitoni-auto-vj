@@ -18,14 +18,14 @@ float random(vec2 st) {
 void main(){
     vec2 uv = texCoordVarying;
 
-	// --- 2. SUBTLE SHIVER (Smoothed) ---
+	// --- 1. SUBTLE SHIVER (Smoothed) ---
 	float shiverFactor = smoothstep(lowThresh, lowThresh + 0.1, mids);
 	float sliceCount = 12.0;
 	float sliceY = floor(uv.y / (res.y / sliceCount));
 	float jitter = (random(vec2(sliceY, floor(time * 20.0))) - 0.5);
 	uv.x += jitter * mids * 2.8 * shiverFactor;
 
-	// --- 3. DYNAMIC BLOCK SHIFT (Smoothed) ---
+	// --- 2. DYNAMIC BLOCK SHIFT (Smoothed) ---
 	float shiftFactor = smoothstep(highThresh, highThresh + 0.1, mids);
 	float blockCount = 6.0;
 	float blockY = floor(texCoordVarying.y / (res.y / blockCount));
@@ -35,13 +35,13 @@ void main(){
 		uv.x += (shiftSeed - 0.5) * mids * 15.0 * shiftFactor;
 	}
 
-	// --- 4. DYNAMIC GEOMETRIC MOSH PATTERN (8-Style Mega Evolution) ---
+	// --- 3. DYNAMIC GEOMETRIC MOSH PATTERN (8-Style Mega Evolution) ---
 	float shapeMask = 0.0;
 	vec2 moshUv = uv;
 
-	// 1. GATING: Calculate a "Burst" factor based on sudden volume jumps
+	// Calculate burst factor based on sudden volume jumps
 	float burst = smoothstep(0.05, 0.4, impactDelta);
-	// REMOVED bottleneck: increased minimum midActive so patterns are always at least partially visible
+	// Ensure pattern visibility at all mids levels with base opacity
 	float midActive = smoothstep(lowThresh, lowThresh + 0.1, mids) * (0.5 + burst * 0.5);
 	
 	vec2 center = res * 0.5;
@@ -65,7 +65,7 @@ void main(){
 	float r = length(p);
 	float a = atan(p.y, p.x);
 	
-	// --- MODE CHANGE LOGIC ---
+	// --- 4. MODE CHANGE LOGIC ---
 	if(mode < 1.0) {
 		// STYLE 1: LIQUID SILK - Organic, wavy interference lines
 		d = abs(sin(p.y * freq + time) * sin(p.x * freq - time));
@@ -98,10 +98,10 @@ void main(){
 	float mask = smoothstep(2.2, 0.3, r);
 	float intensity = smoothstep(lowThresh, highThresh, mids);
 	
-	// VISIBILITY FIX: Increased minimum thickness from 0.02 to 0.12 so lines never disappear
+	// Set line thickness with minimum visibility at all volume levels
 	float lineThickness = mix(0.12, 0.5, intensity * (0.5 + burst * 0.5)) + (subBass * 0.1);
 	
-	// Higher contrast edge for the lines
+	// Create sharp edges on pattern lines
 	shapeMask = smoothstep(lineThickness, lineThickness - 0.08, d) * mask * midActive;
 
 	// Displacement: The mosh "explodes" further outward on bursts
@@ -138,7 +138,7 @@ void main(){
 
     if(invertToggle) color.rgb = 1.0 - color.rgb;
 
-    // --- 8. INTERNAL SCANLINES ---
+    // --- 7. INTERNAL SCANLINES ---
     float s = sin(texCoordVarying.y * 2.0) * 0.05;
     color.rgb -= s;
 
