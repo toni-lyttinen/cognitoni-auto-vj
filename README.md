@@ -90,5 +90,7 @@ The app cycles through these modes automatically to keep the visuals evolving:
 * **Codecs:** Install `gstreamer-plugins-good`, `base`, and `ugly` to ensure MP4/MOV hardware acceleration.
 </details>
 
+**TODO**: Make built versions for each OS
+
 ---
 *Built with openFrameworks and GLSL.*
