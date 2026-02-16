@@ -8,6 +8,7 @@ public:
 	void setup();
 	void update();
 	void draw();
+	~ofApp(); // Destructor for proper cleanup
 	void drawVisualizerHUD();
 	void drawEventCredits();
 	void mousePressed(int x, int y, int button);
@@ -65,4 +66,8 @@ public:
 	void selectFolderPressed();
 	void startPressed();
 	void deviceButtonPressed(bool & val);
+
+	// Memory Management
+	void cleanupDeviceToggles();
+	void cleanupAudioResources();
 };

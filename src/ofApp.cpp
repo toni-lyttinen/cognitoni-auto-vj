@@ -1,5 +1,28 @@
 #include "ofApp.h"
 
+ofApp::~ofApp() {
+	cleanupAudioResources();
+	cleanupDeviceToggles();
+	if (fft != nullptr) {
+		delete fft;
+		fft = nullptr;
+	}
+}
+
+void ofApp::cleanupDeviceToggles() {
+	for (auto toggle : deviceToggles) {
+		if (toggle) {
+			delete toggle;
+		}
+	}
+	deviceToggles.clear();
+}
+
+void ofApp::cleanupAudioResources() {
+	soundStream.stop();
+	soundStream.close();
+}
+
 void ofApp::setup() {
 	ofSetBackgroundAuto(false); // Tell oF not to clear the screen automatically
 
@@ -32,7 +55,9 @@ void ofApp::setup() {
 	#endif
 	
 	fft = ofxFft::create(1024, OF_FFT_WINDOW_HAMMING);
-	fftBins.resize(fft->getBinSize());
+	if (fft != nullptr) {
+		fftBins.resize(fft->getBinSize());
+	}
 	
 	sldAudioGain = 1.0f; // default value 1.0
 
@@ -62,10 +87,15 @@ void ofApp::selectFolderPressed() {
 	ofFileDialogResult res = ofSystemLoadDialog("Select Video Folder", true);
 
 	if (res.bSuccess) {
-		// 1. STOP everything immediately to prevent a crash while clearing data
+		// 1. STOP audio stream and clean up previous state
+		cleanupAudioResources();
 		isLive = false;
+		
+		// 2. STOP video and ensure GPU memory is released
+		if (video.isLoaded()) {
+			video.closeMovie();
+		}
 		video.stop();
-		video.close();
 
 		folderPath = res.getPath();
 		lblFolderPath = folderPath;
@@ -75,16 +105,15 @@ void ofApp::selectFolderPressed() {
 		dir.allowExt("mov");
 		dir.listDir();
 
-		// 2. Clear and fill the vector safely
+		// 3. Clear video files list
 		videoFiles.clear();
 		for (int i = 0; i < dir.size(); i++) {
-			// getPath(i) is more stable than getFile().getAbsolutePath()
 			videoFiles.push_back(dir.getPath(i));
 		}
 
 		ofLogNotice() << "Videos found: " << videoFiles.size();
 
-		// 3. Only load if the folder isn't empty
+		// 4. Only load if the folder isn't empty
 		if (videoFiles.size() > 0) {
 			loadRandomVideo();
 		} else {
@@ -129,8 +158,8 @@ void ofApp::startPressed() {
 		return;
 	}
 
-	soundStream.stop();
-	soundStream.close();
+	// Clean up previous audio stream
+	cleanupAudioResources();
 
 	auto devices = soundStream.getDeviceList(currentApi);
 	vector<ofSoundDevice> inputs;
@@ -141,21 +170,21 @@ void ofApp::startPressed() {
 	settings.setApi(currentApi);
 	
 	// Safety check for the index
-		if(selectedDeviceID >= 0 && selectedDeviceID < inputs.size()) {
-			settings.setInDevice(inputs[selectedDeviceID]);
-			
-			// Match the hardware settings exactly
-			#ifdef TARGET_OSX
-				settings.sampleRate = inputs[selectedDeviceID].sampleRates[0]; // Use device defaults
-				settings.numInputChannels = inputs[selectedDeviceID].inputChannels;
-			#else
-				settings.sampleRate = 44100;
-				settings.numInputChannels = 1;
-			#endif
-		}
+	if(selectedDeviceID >= 0 && selectedDeviceID < inputs.size()) {
+		settings.setInDevice(inputs[selectedDeviceID]);
+		
+		// Match the hardware settings exactly
+		#ifdef TARGET_OSX
+			settings.sampleRate = inputs[selectedDeviceID].sampleRates[0]; // Use device defaults
+			settings.numInputChannels = inputs[selectedDeviceID].inputChannels;
+		#else
+			settings.sampleRate = 44100;
+			settings.numInputChannels = 1;
+		#endif
+	}
 
-		settings.setInListener(this);
-		settings.bufferSize = 1024;
+	settings.setInListener(this);
+	settings.bufferSize = 1024;
 
 	if (soundStream.setup(settings)) {
 		loadRandomVideo();
@@ -166,6 +195,8 @@ void ofApp::startPressed() {
 }
 
 void ofApp::audioIn(ofSoundBuffer & input) {
+	if (fft == nullptr) return;
+	
 	fft->setSignal(input.getBuffer());
 	float* analyzerBuffer = fft->getAmplitude();
 	int numBins = fft->getBinSize();
@@ -336,9 +367,9 @@ void ofApp::draw() {
 				0, i * (video.getHeight() / numSlices));
 		}
 	} else {
-			// Draw full texture centered
-			ofSetColor(255);
-			// Already translated to center, so offset from center point
+		// Draw full texture centered
+		ofSetColor(255);
+		// Already translated to center, so offset from center point
 		video.getTexture().draw(-ofGetWidth()/2, -ofGetHeight()/2, ofGetWidth(), ofGetHeight());
 	}
 	shader.end();
@@ -459,9 +490,11 @@ void ofApp::mouseDragged(int x, int y, int button) {
 void ofApp::loadRandomVideo() {
 	if (bIsLoading || videoFiles.empty()) return;
 	
-	// Force the hardware decoder to release the last file
+	// Force the hardware decoder to release the last file completely
+	if (video.isLoaded()) {
+		video.closeMovie();
+	}
 	video.stop();
-	video.close();
 
 	bIsLoading = true;
 	bPendingLoad = false;
