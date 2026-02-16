@@ -1,4 +1,4 @@
-# ⚡ Auto VJ - Real-time Audio Visualizer
+# ⚡ Cognitoni Auto VJ - Real-time Audio Visualizer
 
 An aggressive, shader-based video manipulation engine built with **openFrameworks**. This tool transforms standard video libraries into high-energy visuals by mapping real-time FFT frequency data to complex GLSL mosh patterns and geometric displacements.
 
@@ -8,7 +8,6 @@ An aggressive, shader-based video manipulation engine built with **openFramework
 
 ### 1. Select Video Folder
 * Click **"Select Video Folder"** and choose the directory containing your `.mp4` or `.mov` files.
-* **Performance Tip:** If using an external drive (like Transcend), the app uses `loadAsync` to prevent UI freezing during file swaps.
 
 ### 2. Audio Input Setup
 * The GUI lists all detected hardware inputs.
@@ -49,26 +48,38 @@ The app cycles through these modes automatically to keep the visuals evolving:
 8.  **Geometric Fractal**: Boxy, folded space with sharp angles.
 
 ---
+## 🛠 Setup & Installation (TODO)
 
-## 🛠 Setup & Installation
+<details>
+<summary><b>🍎 MacOS Setup (Verified)</b></summary>
 
-### MacOS Setup (Verified)
-- [ ] Install **Visual Studio Code** & **Xcode**.
-- [ ] Download **openFrameworks** and unpack.
-- [ ] Move `ProjectGenerator` out of its folder and back in (to reset relative paths).
-- [ ] Install Addons: `ofxFft`, `ofxGui`.
-- [ ] Import project via **projectGenerator** and open in IDE.
-- [ ] **Crucial:** Copy `shader.vert` and `shader.frag` to `bin/data/`.
-- [ ] **Permissions:** Grant Xcode/App "Full Disk Access" in System Settings for external drive read access.
+* **IDEs:** Install **Visual Studio Code** & **Xcode**.
+* **Framework:** Download **openFrameworks** (macOS release) and unpack.
+* **Path Fix:** If the Project Generator fails, move it out of its folder and back in to reset relative paths.
+* **Required Addons:** * `ofxGui` (Core - usually auto-added by Project Generator)
+    * `ofxFft` (External - requires `fftw` library)
+    * `ofxPostProcessing` (External - used for GLSL stack effects)
+* **Importing:** Use the **projectGenerator** to "Import" the folder, then open the generated `.xcodeproj` file.
+* **Assets:** Ensure `shader.vert` and `shader.frag` are inside the `bin/data/` folder.
+* **Permissions:** Grant Xcode (and the final exported App) **Full Disk Access** in *System Settings > Privacy & Security* to allow the app to read video files from external drives or protected folders.
+</details>
 
-### Windows TODO
-- [ ] Install **Visual Studio 2022**.
-- [ ] Change audio API to `MS_WASAPI`.
-- [ ] Set `video.setPixelFormat(OF_PIXELS_NATIVE)`.
+<details>
+<summary><b>🪟 Windows Setup (TODO)</b></summary>
 
-### Linux TODO
-- [ ] Run `install_dependencies.sh`.
-- [ ] Configure `ofSoundStream` for **ALSA** or **PulseAudio**.
+* **IDE:** Install **Visual Studio 2022** (Community Edition).
+* **Audio API:** Change the setup logic to use `ofSoundDevice::Api::MS_WASAPI`.
+* **Performance:** Use `video.setPixelFormat(OF_PIXELS_NATIVE)` to allow the GPU to handle decoding more efficiently.
+* **FFT:** Ensure the `fftw` dll files are present in the `bin` folder for the app to launch.
+</details>
+
+<details>
+<summary><b>🐧 Linux Setup (TODO)</b></summary>
+
+* **Dependencies:** Run the `scripts/linux/ubuntu/install_dependencies.sh` script provided in the oF root.
+* **Audio:** Configure `ofSoundStream` for **ALSA** or **PulseAudio** depending on your distribution.
+* **Codecs:** Install `gstreamer-plugins-good`, `base`, and `ugly` to ensure MP4/MOV hardware acceleration.
+</details>
 
 ---
 *Built with openFrameworks and GLSL.*
