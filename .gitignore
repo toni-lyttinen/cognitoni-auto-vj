@@ -406,7 +406,10 @@ xcodebuild.log
 # --- Windows / Visual Studio ---
 .vs/
 *.sln
+CognitoniReactiveVideoPlayer.sln
 *.vcxproj
+CognitoniReactiveVideoPlayer.vcxproj
+CognitoniReactiveVideoPlayer.vcxproj.filters
 *.vcxproj.filters
 *.vcxproj.user
 *.suo
@@ -416,8 +419,9 @@ Debug/
 Release/
 x64/
 
-# --- Local Configuration ---
+# --- Local Configuration & User Settings ---
 settings.json
+*.json.local
 obj/
 
 # --- Keep Important Project Files ---
