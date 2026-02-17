@@ -17,20 +17,24 @@ public:
 
 	// GUI - Layout Elements
 	ofxPanel gui;
+	ofxPanel guiLive;
 	ofxButton btnSelectFolder;
 	ofxLabel lblFolderPath;
 	ofxButton btnStart;
+	ofxButton btnStop;
 	ofxLabel lblDeviceHeader;
 	ofxLabel lblSpacer;
 	ofxFloatSlider sldAudioGain;
 
 	// GUI - Input Selection
 	vector<ofxToggle *> deviceToggles;
-	bool isUpdatingGui = false; // MUST be here to handle radio button logic
+	vector<bool> deviceToggleStates;
+	bool isUpdatingGui = false; // handle radio button logic
+	bool bIsTransitioning = false; // Block input for buttons as of buttons are clickable even when not rendered
 
 	// Logic State
 	string folderPath = "";
-	int selectedDeviceID = -1;
+	int selectedDeviceIndex = -1;
 	bool isLive = false;
 
 	// Audio & Analysis
@@ -65,9 +69,13 @@ public:
 	// UI Event Handlers
 	void selectFolderPressed();
 	void startPressed();
+	void stopPressed();
 	void deviceButtonPressed(bool & val);
+	void updateStartButtonLabel();
+	void buildSettingsGui();
+	bool startLiveSession(bool allowVideoLoad = true);
+	void stopLiveSession();
 
 	// Memory Management
 	void cleanupDeviceToggles();
-	void cleanupAudioResources();
 };

@@ -1,509 +1,531 @@
 #include "ofApp.h"
 
 ofApp::~ofApp() {
-	cleanupAudioResources();
-	cleanupDeviceToggles();
-	if (fft != nullptr) {
-		delete fft;
-		fft = nullptr;
-	}
+    // Force a full hardware release on exit
+    if (soundStream.getSoundStream()) {
+        soundStream.stop();
+        soundStream.close();
+    }
+    
+    cleanupDeviceToggles();
+    if (fft != nullptr) {
+        delete fft;
+        fft = nullptr;
+    }
 }
 
 void ofApp::cleanupDeviceToggles() {
-	for (auto toggle : deviceToggles) {
-		if (toggle) {
-			delete toggle;
-		}
-	}
-	deviceToggles.clear();
+    for (auto toggle : deviceToggles) {
+        if (toggle) {
+            delete toggle;
+        }
+    }
+    deviceToggles.clear();
+    deviceToggleStates.clear();
 }
 
-void ofApp::cleanupAudioResources() {
-	soundStream.stop();
-	soundStream.close();
+void ofApp::updateStartButtonLabel() {
+    btnStart.setName("START VJ");
+    btnStart.getParameter().setName("START VJ");
+    btnStop.setName("STOP VJ");
+    btnStop.getParameter().setName("STOP VJ");
+}
+
+void ofApp::buildSettingsGui() {
+    isUpdatingGui = true; 
+    bIsTransitioning = true; // Block all inputs
+
+    cleanupDeviceToggles(); 
+    gui.clear();
+    gui.setup("Cognitoni Auto VJ");
+
+    gui.add(btnSelectFolder.setup("1. Select Video Folder"));
+    gui.add(lblFolderPath.setup("Selected path:", folderPath));
+    gui.add(lblSpacer.setup("", ""));
+    gui.add(lblDeviceHeader.setup("2. Select Input Device", ""));
+
+    vector<ofSoundDevice> devices;
+    {
+        ofSoundStream deviceFetcher;
+        devices = deviceFetcher.getDeviceList(currentApi);
+    } 
+
+    for (int i = 0; i < (int)devices.size(); i++) {
+        if (devices[i].inputChannels > 0) {
+            ofxToggle * tgl = new ofxToggle();
+            gui.add(tgl->setup(devices[i].name, false));
+            tgl->addListener(this, &ofApp::deviceButtonPressed);
+            deviceToggles.push_back(tgl);
+            deviceToggleStates.push_back(false);
+        }
+    }
+
+    gui.add(lblSpacer.setup("", ""));
+    gui.add(btnStart.setup("START VJ"));
+
+    btnSelectFolder.addListener(this, &ofApp::selectFolderPressed);
+    btnStart.addListener(this, &ofApp::startPressed);
+
+    selectedDeviceIndex = -1; 
+    isUpdatingGui = false;    
+}
+
+bool ofApp::startLiveSession(bool allowVideoLoad) {
+    if (videoFiles.empty() || selectedDeviceIndex < 0) return false;
+
+    string targetName = deviceToggles[selectedDeviceIndex]->getName();
+    auto devices = soundStream.getDeviceList(currentApi);
+    ofSoundDevice selectedDevice;
+    bool found = false;
+    for (auto& d : devices) {
+        if (d.inputChannels > 0 && d.name == targetName) {
+            selectedDevice = d;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) return false;
+
+    ofSoundStreamSettings settings;
+    settings.setApi(currentApi);
+    settings.setInDevice(selectedDevice);
+    settings.setInListener(this);
+    settings.numInputChannels = (selectedDevice.inputChannels > 2) ? 2 : selectedDevice.inputChannels;
+    settings.numOutputChannels = 0;
+    settings.sampleRate = 44100;
+    settings.bufferSize = 1024;
+
+    if (soundStream.setup(settings)) {
+        isLive = true;
+        if (video.isLoaded()) video.play();
+        else if (allowVideoLoad) loadRandomVideo();
+        return true;
+    }
+    return false;
 }
 
 void ofApp::setup() {
-	ofSetBackgroundAuto(false); // Tell oF not to clear the screen automatically
+    ofSetBackgroundAuto(false);
+    shader.load("shader.vert", "shader.frag");
+    
+    // Setup the "Live" GUI (the one seen while VJing)
+    guiLive.setup("Cognitoni Auto VJ");
+    guiLive.add(btnStop.setup("STOP VJ"));
+    btnStop.addListener(this, &ofApp::stopPressed);
 
-	bool success = shader.load("shader.vert", "shader.frag");
-	if (success) {
-		ofLogNotice() << "SUCCESS: Shaders are live!";
-	} else {
-		ofLogError() << "FAILURE: Shaders still missing from bundle.";
-	}
+    #ifdef TARGET_OSX
+        currentApi = ofSoundDevice::Api::OSX_CORE;
+    #else
+        currentApi = ofSoundDevice::Api::MS_WASAPI;
+    #endif
 
-	gui.setup("Cognitoni Auto VJ");
+    fft = ofxFft::create(1024, OF_FFT_WINDOW_HAMMING);
+    if (fft != nullptr) fftBins.resize(fft->getBinSize());
+    
+    sldAudioGain = 1.0f;
 
-	// Select Folder (Button)
-	gui.add(btnSelectFolder.setup("1. Select Video Folder"));
-
-	// Selected Path (Label)
-	gui.add(lblFolderPath.setup("Selected path:", "None Selected"));
-
-	//  *spacer*
-	gui.add(lblSpacer.setup("", ""));
-
-	// Input Device Header
-	gui.add(lblDeviceHeader.setup("2. Select Input Device", ""));
-
-	// **list devices here as radio buttons**
-	#ifdef TARGET_OSX
-		currentApi = ofSoundDevice::Api::OSX_CORE;
-	#else
-		currentApi = ofSoundDevice::Api::MS_WASAPI;
-	#endif
-	
-	fft = ofxFft::create(1024, OF_FFT_WINDOW_HAMMING);
-	if (fft != nullptr) {
-		fftBins.resize(fft->getBinSize());
-	}
-	
-	sldAudioGain = 1.0f; // default value 1.0
-
-	auto devices = soundStream.getDeviceList(currentApi);
-	for (int i = 0; i < devices.size(); i++) {
-		if (devices[i].inputChannels > 0) {
-			ofxToggle * tgl = new ofxToggle();
-			gui.add(tgl->setup(devices[i].name, false));
-			tgl->addListener(this, &ofApp::deviceButtonPressed);
-			deviceToggles.push_back(tgl);
-		}
-	}
-
-	// *spacer*
-	gui.add(lblSpacer.setup("", ""));
-
-	// Start (Button) - NOW AT THE BOTTOM
-	gui.add(btnStart.setup("START VJ"));
-
-	// Handlers
-	btnSelectFolder.addListener(this, &ofApp::selectFolderPressed);
-	btnStart.addListener(this, &ofApp::startPressed);
-	
+    // Call the builder to create the initial Menu
+    buildSettingsGui(); 
 }
 
 void ofApp::selectFolderPressed() {
-	ofFileDialogResult res = ofSystemLoadDialog("Select Video Folder", true);
+    if (bIsTransitioning || isLive) return; // Hard block during transition or live session
 
-	if (res.bSuccess) {
-		// 1. STOP audio stream and clean up previous state
-		cleanupAudioResources();
-		isLive = false;
-		
-		// 2. STOP video and ensure GPU memory is released
-		if (video.isLoaded()) {
-			video.closeMovie();
-		}
-		video.stop();
+    ofFileDialogResult res = ofSystemLoadDialog("Select Video Folder", true);
 
-		folderPath = res.getPath();
-		lblFolderPath = folderPath;
+    if (res.bSuccess) {
+        string newFolderPath = res.getPath();
+        ofDirectory dir(newFolderPath);
+        dir.allowExt("mp4");
+        dir.allowExt("mov");
+        dir.listDir();
 
-		ofDirectory dir(folderPath);
-		dir.allowExt("mp4");
-		dir.allowExt("mov");
-		dir.listDir();
+        vector<string> newVideoFiles;
+        for (int i = 0; i < dir.size(); i++) {
+            newVideoFiles.push_back(dir.getPath(i));
+        }
 
-		// 3. Clear video files list
-		videoFiles.clear();
-		for (int i = 0; i < dir.size(); i++) {
-			videoFiles.push_back(dir.getPath(i));
-		}
+        ofLogNotice() << "Videos found: " << newVideoFiles.size();
 
-		ofLogNotice() << "Videos found: " << videoFiles.size();
+        if (newVideoFiles.empty()) {
+            ofSystemAlertDialog("Error: No videos found in that folder.");
+            return;
+        }
 
-		// 4. Only load if the folder isn't empty
-		if (videoFiles.size() > 0) {
-			loadRandomVideo();
-		} else {
-			ofSystemAlertDialog("Error: No videos found in that folder.");
-		}
-	}
+        folderPath = newFolderPath;
+        lblFolderPath = folderPath;
+        videoFiles = newVideoFiles;
+
+        bPendingLoad = false;
+        bIsLoading = false;
+        video.stop();
+        if (video.isLoaded()) {
+            video.closeMovie();
+        }
+
+        loadRandomVideo();
+    }
 }
 
 void ofApp::deviceButtonPressed(bool & val) {
-	if (isUpdatingGui) return; // Stop the loop!
+    if (isUpdatingGui) return; // Stop the loop!
+    if (isLive) return; // Keep selection immutable while running for cross-platform stability
 
-	for (int i = 0; i < deviceToggles.size(); i++) {
-		// If we found the toggle that is ON
-		if (deviceToggles[i]->getParameter().cast<bool>().get()) {
+    if (deviceToggleStates.size() != deviceToggles.size()) {
+        deviceToggleStates.assign(deviceToggles.size(), false);
+    }
 
-			isUpdatingGui = true; // Start Silencing
-			selectedDeviceID = i;
+    int changedIndex = -1;
+    for (int i = 0; i < static_cast<int>(deviceToggles.size()); i++) {
+        bool currentValue = deviceToggles[i]->getParameter().cast<bool>().get();
+        if (currentValue != deviceToggleStates[i]) {
+            changedIndex = i;
+            deviceToggleStates[i] = currentValue;
+        }
+    }
 
-			string selectedName = deviceToggles[i]->getName();
-			ofLogNotice() << ">>> NEW SELECTION: " << selectedName;
+    if (changedIndex == -1) return;
 
-			// Turn off EVERY other toggle
-			for (int j = 0; j < deviceToggles.size(); j++) {
-				if (i != j) {
-					deviceToggles[j]->getParameter().cast<bool>().set(false);
-				}
-			}
-			isUpdatingGui = false; // Stop Silencing
+    bool changedValue = deviceToggles[changedIndex]->getParameter().cast<bool>().get();
 
-			return;
-		}
-	}
+    if (!changedValue) {
+        if (changedIndex == selectedDeviceIndex) {
+            isUpdatingGui = true;
+            deviceToggles[changedIndex]->getParameter().cast<bool>().set(true);
+            isUpdatingGui = false;
+            deviceToggleStates[changedIndex] = true;
+        }
+        return;
+    }
+
+    selectedDeviceIndex = changedIndex;
+
+    isUpdatingGui = true;
+    for (int i = 0; i < static_cast<int>(deviceToggles.size()); i++) {
+        bool shouldBeOn = (i == changedIndex);
+        deviceToggles[i]->getParameter().cast<bool>().set(shouldBeOn);
+        deviceToggleStates[i] = shouldBeOn;
+    }
+    isUpdatingGui = false;
+
+    ofLogNotice() << ">>> NEW SELECTION: " << deviceToggles[changedIndex]->getName();
 }
 
 void ofApp::startPressed() {
-	if (videoFiles.empty()) {
-		ofSystemAlertDialog("Select video folder first!");
-		return;
-	}
-	if (selectedDeviceID == -1) {
-		ofSystemAlertDialog("Select an audio device first!");
-		return;
-	}
+    if (bIsTransitioning || isLive) return;
 
-	// Clean up previous audio stream
-	cleanupAudioResources();
+    // Load video first to manage thread priorities
+    if (!video.isLoaded()) {
+        loadRandomVideo();
+    }
 
-	auto devices = soundStream.getDeviceList(currentApi);
-	vector<ofSoundDevice> inputs;
-	for (auto & d : devices)
-		if (d.inputChannels > 0) inputs.push_back(d);
+    // Start audio after video initialization
+    startLiveSession(false); 
+}
 
-	ofSoundStreamSettings settings;
-	settings.setApi(currentApi);
-	
-	// Safety check for the index
-	if(selectedDeviceID >= 0 && selectedDeviceID < inputs.size()) {
-		settings.setInDevice(inputs[selectedDeviceID]);
-		
-		// Match the hardware settings exactly
-		#ifdef TARGET_OSX
-			settings.sampleRate = inputs[selectedDeviceID].sampleRates[0]; // Use device defaults
-			settings.numInputChannels = inputs[selectedDeviceID].inputChannels;
-		#else
-			settings.sampleRate = 44100;
-			settings.numInputChannels = 1;
-		#endif
-	}
-
-	settings.setInListener(this);
-	settings.bufferSize = 1024;
-
-	if (soundStream.setup(settings)) {
-		loadRandomVideo();
-		isLive = true;
-	} else {
-		ofSystemAlertDialog("Audio Hardware Error: Try selecting a different device.");
-	}
+void ofApp::stopPressed() {
+    // Exit application to ensure full hardware reset
+    ofExit();
 }
 
 void ofApp::audioIn(ofSoundBuffer & input) {
-	if (fft == nullptr) return;
-	
-	fft->setSignal(input.getBuffer());
-	float* analyzerBuffer = fft->getAmplitude();
-	int numBins = fft->getBinSize();
-	
-	float s = 0, lm = 0, m = 0, hm = 0, t = 0;
-	
-	// Use the actual buffer rate to keep math accurate
-	int sampleRate = input.getSampleRate();
-	// Frequency per bin = SampleRate / (N_FFT)
-	float binSize = (float)sampleRate / (float)(numBins * 2);
+    if (!isLive || fft == nullptr) return;
+    
+    fft->setSignal(input.getBuffer());
+    float* analyzerBuffer = fft->getAmplitude();
+    int numBins = fft->getBinSize();
+    
+    float s = 0, lm = 0, m = 0, hm = 0, t = 0;
 
-	// Calculate indices dynamically to match frequency targets
-	int subCutoff = 150 / binSize;
-	int lowMidCut = 350 / binSize;
-	int midCut = 1000 / binSize;
-	int highMidCut = 4000 / binSize;
+    // Use the actual buffer rate to keep math accurate
+    int sampleRate = input.getSampleRate();
+    
+    // Frequency per bin = SampleRate / (N_FFT)
+    float binSize = (float)sampleRate / (float)(numBins * 2);
 
-	int counts[5] = { 0, 0, 0, 0, 0 };
+    // Calculate indices dynamically to match frequency targets
+    int subCutoff = 150 / binSize;
+    int lowMidCut = 350 / binSize;
+    int midCut = 1000 / binSize;
+    int highMidCut = 4000 / binSize;
 
-	for (int i = 0; i < numBins; i++) {
-		float osxBoost = 1.0f;
-		
-		// Apply frequency tilt to counter natural energy drop-off in higher frequencies
-		float tilt = 1.0f + ((float)i / (float)numBins) * 10.0f;
-		float sample = analyzerBuffer[i] * (float)sldAudioGain * osxBoost * 25.0f * tilt;
+    int counts[5] = { 0, 0, 0, 0, 0 };
 
-		if (i <= subCutoff) {
-			s += sample;
-			counts[0]++;
-		} else if (i <= lowMidCut) {
-			lm += sample;
-			counts[1]++;
-		} else if (i <= midCut) {
-			m += sample;
-			counts[2]++;
-		} else if (i <= highMidCut) {
-			hm += sample;
-			counts[3]++;
-		} else {
-			t += sample;
-			counts[4]++;
-		}
-	}
+    for (int i = 0; i < numBins; i++) {
+        // Apply frequency tilt to counter natural energy drop-off in higher frequencies
+        float tilt = 1.0f + ((float)i / (float)numBins) * 10.0f;
+        float sample = analyzerBuffer[i] * (float)sldAudioGain * 25.0f * tilt;
 
-	// Blend band values with unique multipliers per frequency range
-	subBass = ofLerp(subBass, (s / max(1, counts[0])) * 1.0f, 0.1f);
-	lowMids = ofLerp(lowMids, (lm / max(1, counts[1])) * 1.8f, 0.1f);
-	mids = ofLerp(mids, (m / max(1, counts[2])) * 2.5f, 0.1f);
-	highMids = ofLerp(highMids, (hm / max(1, counts[3])) * 4.0f, 0.1f);
-	treble = ofLerp(treble, (t / max(1, counts[4])) * 6.0f, 0.1f);
+        if (i <= subCutoff) {
+            s += sample;
+            counts[0]++;
+        } else if (i <= lowMidCut) {
+            lm += sample;
+            counts[1]++;
+        } else if (i <= midCut) {
+            m += sample;
+            counts[2]++;
+        } else if (i <= highMidCut) {
+            hm += sample;
+            counts[3]++;
+        } else {
+            t += sample;
+            counts[4]++;
+        }
+    }
+    // Blend band values with unique multipliers per frequency range
+    subBass = ofLerp(subBass, (s / max(1, counts[0])) * 1.0f, 0.1f);
+    lowMids = ofLerp(lowMids, (lm / max(1, counts[1])) * 1.8f, 0.1f);
+    mids = ofLerp(mids, (m / max(1, counts[2])) * 2.5f, 0.1f);
+    highMids = ofLerp(highMids, (hm / max(1, counts[3])) * 4.0f, 0.1f);
+    treble = ofLerp(treble, (t / max(1, counts[4])) * 6.0f, 0.1f);
 }
 
 void ofApp::update() {
-	if (!isLive) return;
+    // If we just rebuilt the GUI, wait one frame, then enable buttons
+    if (bIsTransitioning) {
+        bIsTransitioning = false; 
+        return; 
+    }
 
-	video.update();
+    if (!isLive) return;
 
-	// Visual Smoothing Math
-	if (strobeTimer > 0) strobeTimer -= 0.1f;
-	float impactDelta = std::max(0.0f, lowMids - (smoothedLowMids + 0.1f));
-	if (impactDelta > 0.45f) strobeTimer = 1.0f;
+    video.update();
 
-	smoothedLowMids = ofLerp(smoothedLowMids, lowMids, 0.05f);
-	zoomValue = ofLerp(zoomValue, 1.0f + (impactDelta * 15.0f), 0.3f);
-	smoothedHue = ofLerp(smoothedHue, hueValue, 0.05f);
+    // Visual Smoothing Math
+    if (strobeTimer > 0) strobeTimer -= 0.1f;
+    float impactDelta = std::max(0.0f, lowMids - (smoothedLowMids + 0.1f));
+    if (impactDelta > 0.45f) strobeTimer = 1.0f;
 
-	// 1. IF WE ARE WAITING FOR A LOAD
-	if (bPendingLoad) {
-		// Only trigger the load if we aren't already in the middle of one
-		if (!bIsLoading) {
-			loadRandomVideo();
-		}
-		return; // Don't do anything else until this is resolved
-	}
+    smoothedLowMids = ofLerp(smoothedLowMids, lowMids, 0.05f);
+    zoomValue = ofLerp(zoomValue, 1.0f + (impactDelta * 15.0f), 0.3f);
+    smoothedHue = ofLerp(smoothedHue, hueValue, 0.05f);
 
-	// 2. MONITOR LOADING STATUS
-	if (bIsLoading) {
-		if (video.isLoaded()) {
-			video.play();
-			// Set to NONE so getIsMovieDone() can trigger for next video
-			video.setLoopState(OF_LOOP_NONE);
-			bIsLoading = false;
-		}
-		return;
-	}
-
-	// 3. REGULAR PLAYBACK & END-OF-VIDEO CHECK
-	if (video.isLoaded() && video.getIsMovieDone()) {
-		ofLogNotice() << "MOVIE DONE TRIGGER";
-		
-		video.stop();
-		bPendingLoad = true;
-	}
+    // End-of-video check and random reload
+    if (video.isLoaded() && video.getIsMovieDone()) {
+        ofLogNotice() << "MOVIE DONE TRIGGER";
+        loadRandomVideo();
+    }
 }
 
 void ofApp::draw() {
-	if (!isLive) {
-		ofSetBackgroundAuto(true);
-		ofBackground(40);
-		gui.draw();
-		return;
-	}
-	
-	// Check if we are ready. If not, draw black and stop.
-	if (!video.isLoaded() || !video.getTexture().isAllocated()) {
-		ofSetBackgroundAuto(true);
-		ofBackground(0);
-		return;
-	}
+    updateStartButtonLabel();
 
-	// 1. DYNAMIC MOTION BLUR (Reactive Alpha)
-	float blurAmount = ofMap(mids, 0.2, 0.8, 80, 15, true);
-	ofSetBackgroundAuto(false);
-	ofSetColor(0, 0, 0, blurAmount);
-	ofDrawRectangle(0, 0, ofGetWidth(), ofGetHeight());
+    // If not live, clear the screen and show settings
+    if (!isLive) {
+        ofSetBackgroundAuto(true);
+        ofBackground(40); // Dark grey settings background
+        gui.draw();
+        return;
+    }
+    
+    // Check if we are ready. If not, draw black and stop.
+    if (!video.isLoaded() || !video.getTexture().isAllocated()) {
+        ofSetBackgroundAuto(true);
+        ofBackground(0);
+        guiLive.draw();
+        return;
+    }
 
-	if (!video.isLoaded() || !video.getTexture().isAllocated()) return;
+    // DYNAMIC MOTION BLUR (Reactive Alpha)
+    float blurAmount = ofMap(mids, 0.2, 0.8, 80, 15, true);
+    ofSetBackgroundAuto(false);
+    ofSetColor(0, 0, 0, blurAmount);
+    ofDrawRectangle(0, 0, ofGetWidth(), ofGetHeight());
 
-	// 2. IMPACT LOGIC
-	float impactDelta = std::max(0.0f, lowMids - (smoothedLowMids + 0.1f));
+    if (!video.isLoaded() || !video.getTexture().isAllocated()) return;
 
-	ofPushMatrix();
-	ofTranslate(ofGetWidth() / 2, ofGetHeight() / 2);
+    // IMPACT LOGIC
+    float impactDelta = std::max(0.0f, lowMids - (smoothedLowMids + 0.1f));
 
-	// 3. JITTER
-	float jitter = ofMap(highMids, 0.3, 1.0, 0.0, 0.3, true);
-	if (jitter > 0.01) ofTranslate(ofRandom(-jitter, jitter), ofRandom(-jitter, jitter));
+    ofPushMatrix();
+    ofTranslate(ofGetWidth() / 2, ofGetHeight() / 2);
 
-	// 4. BOUNCE (Unified Scale Fixes Y-Bounce)
-	float bounceScale = 1.0 + (impactDelta * 18.0);
-	ofScale(zoomValue * bounceScale, zoomValue * bounceScale);
+    // JITTER
+    float jitter = ofMap(highMids, 0.3, 1.0, 0.0, 0.3, true);
+    if (jitter > 0.01) ofTranslate(ofRandom(-jitter, jitter), ofRandom(-jitter, jitter));
 
-	shader.begin();
-	// Bind video texture and elapsed time to shader
-	shader.setUniformTexture("tex0", video.getTexture(), 0);
-	shader.setUniform1f("time", ofGetElapsedTimef());
+    // BOUNCE (Unified Scale Fixes Y-Bounce)
+    float bounceScale = 1.0 + (impactDelta * 18.0);
+    ofScale(zoomValue * bounceScale, zoomValue * bounceScale);
 
-	// Map audio frequencies to shader parameters
-	shader.setUniform1f("pixelSize", ofMap(treble, 0.4, 1.0, 1.0, 8.0, true));
-	shader.setUniform1f("rgbShift", subBass * 8.0 + (impactDelta * 120.0));
-	shader.setUniform1f("impactDelta", impactDelta);
-	shader.setUniform1f("subBass", subBass);
-	shader.setUniform1f("lowMids", lowMids);
-	shader.setUniform1f("mids", mids);
-	shader.setUniform1f("highMids", highMids);
-	shader.setUniform1f("treble", treble);
-	shader.setUniform1f("lowThresh", 0.10f); // Patterns trigger earlier
-	shader.setUniform1f("highThresh", 0.80f); // Blocks trigger earlier
-	shader.setUniform2f("res", (float)ofGetWidth(), (float)ofGetHeight());
+    shader.begin();
+    // Bind video texture and elapsed time to shader
+    shader.setUniformTexture("tex0", video.getTexture(), 0);
+    shader.setUniform1f("time", ofGetElapsedTimef());
 
-	// 5. INVERT (High-bass trigger)
-	bool subInvert = (subBass > 0.8f);
-	shader.setUniform1i("invertToggle", subInvert ? 1 : 0);
+    // Map audio frequencies to shader parameters
+    shader.setUniform1f("pixelSize", ofMap(treble, 0.1, 1.2, 1.0, 14.0, true));
+    shader.setUniform1f("rgbShift", subBass * 8.0 + (impactDelta * 120.0));
+    shader.setUniform1f("impactDelta", impactDelta);
+    shader.setUniform1f("subBass", subBass);
+    shader.setUniform1f("lowMids", lowMids);
+    shader.setUniform1f("mids", mids);
+    shader.setUniform1f("highMids", highMids);
+    shader.setUniform1f("treble", treble);
+    shader.setUniform1f("lowThresh", 0.10f); // Patterns trigger earlier
+    shader.setUniform1f("highThresh", 0.80f); // Blocks trigger earlier
+    shader.setUniform2f("res", (float)ofGetWidth(), (float)ofGetHeight());
 
-	// 6. HSB COLOR PULSE
-	float br = ofMap(highMids, 0.2, 0.8, 150, 190, true);
-	ofSetColor(ofColor::fromHsb(fmod(smoothedHue, 255.0), 160, br));
+    // INVERT (High-bass trigger)
+    bool subInvert = (subBass > 0.8f);
+    shader.setUniform1i("invertToggle", subInvert ? 1 : 0);
 
-	// 7. SLICING
-	if (mids > 0.25) {
-		int numSlices = (int)ofMap(mids, 0.25, 1.0, 16, 64, true);
-		float maxShift = ofMap(mids, 0.25, 1.0, 0.5, 4.0, true);
-		for (int i = 0; i < numSlices; i++) {
-			float xOffset = ofRandom(-maxShift, maxShift);
-			video.getTexture().drawSubsection(
-				-ofGetWidth() / 2 + xOffset, -ofGetHeight() / 2 + (i * (ofGetHeight() / numSlices)),
-				ofGetWidth(), ofGetHeight() / numSlices,
-				0, i * (video.getHeight() / numSlices));
-		}
-	} else {
-		// Draw full texture centered
-		ofSetColor(255);
-		// Already translated to center, so offset from center point
-		video.getTexture().draw(-ofGetWidth()/2, -ofGetHeight()/2, ofGetWidth(), ofGetHeight());
-	}
-	shader.end();
+    // HSB COLOR PULSE
+    float br = ofMap(highMids, 0.2, 0.8, 150, 190, true);
+    ofSetColor(ofColor::fromHsb(fmod(smoothedHue, 255.0), 160, br));
 
-	// 8. IMPACT OVERLAY
-	if (strobeTimer > 0.0f) {
-		ofSetColor(255, 255, 255, strobeTimer * 40.0f);
-		ofDrawRectangle(-ofGetWidth() / 2, -ofGetHeight() / 2, ofGetWidth(), ofGetHeight());
-	}
+    // SLICING
+    if (mids > 0.25) {
+        int numSlices = (int)ofMap(mids, 0.25, 1.0, 16, 64, true);
+        float maxShift = ofMap(mids, 0.25, 1.0, 0.5, 4.0, true);
+        for (int i = 0; i < numSlices; i++) {
+            float xOffset = ofRandom(-maxShift, maxShift);
+            video.getTexture().drawSubsection(
+                -ofGetWidth() / 2 + xOffset, -ofGetHeight() / 2 + (i * (ofGetHeight() / numSlices)),
+                ofGetWidth(), ofGetHeight() / numSlices,
+                0, i * (video.getHeight() / numSlices));
+        }
+    } else {
+        // Draw full texture centered
+        ofSetColor(255);
+        // Already translated to center, so offset from center point
+        video.getTexture().draw(-ofGetWidth()/2, -ofGetHeight()/2, ofGetWidth(), ofGetHeight());
+    }
+    shader.end();
 
-	ofPopMatrix();
+    // IMPACT OVERLAY
+    if (strobeTimer > 0.0f) {
+        ofSetColor(255, 255, 255, strobeTimer * 40.0f);
+        ofDrawRectangle(-ofGetWidth() / 2, -ofGetHeight() / 2, ofGetWidth(), ofGetHeight());
+    }
 
-	// 9. CRT SCANLINES
-	ofSetColor(0, 0, 0, 25);
-	for (int i = 0; i < ofGetHeight(); i += 4)
-		ofDrawLine(0, i, ofGetWidth(), i);
+    ofPopMatrix();
 
-	// 10. HUD & GUI (Menu Logic)
-	drawVisualizerHUD();
-	gui.draw();
-	drawEventCredits(); // credits
+    // CRT SCANLINES
+    ofSetColor(0, 0, 0, 25);
+    for (int i = 0; i < ofGetHeight(); i += 4)
+        ofDrawLine(0, i, ofGetWidth(), i);
+
+    // HUD & GUI (Menu Logic)
+    drawVisualizerHUD();
+    guiLive.draw();
+    drawEventCredits(); // credits
 }
 
 void ofApp::drawEventCredits() {
-	ofPushStyle();
-	ofPushMatrix();
-	
-	ofTranslate(ofGetWidth() - 270, 30);
+    ofPushStyle();
+    ofPushMatrix();
+    
+    ofTranslate(ofGetWidth() - 270, 30);
 
-	ofScale(1.5, 1.5);
-	
-	ofDrawBitmapStringHighlight("Visual tool by @cognitoni", 0, 0, ofColor(0, 200), ofColor(255));
-	
-	ofPopMatrix();
-	ofPopStyle();
+    ofScale(1.5, 1.5);
+    
+    ofDrawBitmapStringHighlight("Visual tool by @cognitoni", 0, 0, ofColor(0, 200), ofColor(255));
+    
+    ofPopMatrix();
+    ofPopStyle();
 }
 
 void ofApp::drawVisualizerHUD() {
-	ofPushStyle();
+    ofPushStyle();
 
-	// --- 1. HUD Dimensions (Twice as high, shifted to Left) ---
-	float panelW = 220;
-	float panelH = 180; // Height doubled for better spacing
-	float xBase = 15; // Anchored left to align with GUI
-	float yBase = ofGetHeight() - panelH - 20;
-	float maxBarH = 100.0; // Fixed bar height
+    // HUD Dimensions (Twice as high, shifted to Left)
+    float panelW = 220;
+    float panelH = 180; 
+    float xBase = 15; // Anchored left to align with GUI
+    float yBase = ofGetHeight() - panelH - 20;
+    float maxBarH = 100.0; // Fixed bar height
 
-	// --- 2. HUD Background (Opaque enough to see over chaos) ---
-	ofSetColor(0, 0, 0, 180);
-	ofDrawRectRounded(xBase - 10, yBase - 10, panelW - 20, panelH, 8);
+    // HUD Background 
+    ofSetColor(0, 0, 0, 180);
+    ofDrawRectRounded(xBase - 10, yBase - 10, panelW - 20, panelH, 8);
 
-	// --- 3. The Frequency Bars (Left Aligned & Clamped) ---
-	float barW = 28;
-	float barGap = 6;
-	float barYAnchor = yBase + maxBarH + 10; // Bottom of the bars 
+    // The Frequency Bars (Left Aligned & Clamped)
+    float barW = 28;
+    float barGap = 6;
+    float barYAnchor = yBase + maxBarH + 10; // Bottom of the bars 
 
-	float vals[] = { subBass, lowMids, mids, highMids, treble };
-	ofColor colors[] = {
-		ofColor(255, 80, 80), ofColor(255, 160, 50), ofColor(80, 255, 80),
-		ofColor(80, 180, 255), ofColor(180, 80, 255)
-	};
+    float vals[] = { subBass, lowMids, mids, highMids, treble };
+    ofColor colors[] = {
+        ofColor(255, 80, 80), ofColor(255, 160, 50), ofColor(80, 255, 80),
+        ofColor(80, 180, 255), ofColor(180, 80, 255)
+    };
 
-	for (int i = 0; i < 5; i++) {
-		// h is mapped to the maxBarH and 5.0 is gain max
-		float h = ofMap(vals[i], 0.0, 5.0, 0, maxBarH, true);
-		ofSetColor(colors[i]);
-		ofDrawRectangle(xBase + (i * (barW + barGap)), barYAnchor, barW, -h);
-	}
+    for (int i = 0; i < 5; i++) {
+        float h = ofMap(vals[i], 0.0, 5.0, 0, maxBarH, true);
+        ofSetColor(colors[i]);
+        ofDrawRectangle(xBase + (i * (barW + barGap)), barYAnchor, barW, -h);
+    }
 
-	// --- 4. The Integrated Slider (Bottom of HUD) ---
-	float sliderY = barYAnchor + 25;
-	float sliderWidth = (barW + barGap) * 4 + barW;
-	float sliderHeight = 12;
+    // The Integrated Slider (Bottom of HUD)
+    float sliderY = barYAnchor + 25;
+    float sliderWidth = (barW + barGap) * 4 + barW;
+    float sliderHeight = 12;
 
-	// Track
-	ofSetColor(60);
-	ofDrawRectangle(xBase, sliderY, sliderWidth, sliderHeight);
+    // Track
+    ofSetColor(60);
+    ofDrawRectangle(xBase, sliderY, sliderWidth, sliderHeight);
 
-	// Fill
-	float fillWidth = ofMap(sldAudioGain, 0.0, 5.0, 0, sliderWidth, true);
-	ofSetColor(200, 200, 255);
-	ofDrawRectangle(xBase, sliderY, fillWidth, sliderHeight);
+    // Fill
+    float fillWidth = ofMap(sldAudioGain, 0.0, 5.0, 0, sliderWidth, true);
+    ofSetColor(200, 200, 255);
+    ofDrawRectangle(xBase, sliderY, fillWidth, sliderHeight);
 
-	// Label
-	ofSetColor(255);
-	ofDrawBitmapString("GAIN: " + ofToString((float)sldAudioGain, 1), xBase, sliderY + 25);
+    // Label
+    ofSetColor(255);
+    ofDrawBitmapString("GAIN: " + ofToString((float)sldAudioGain, 1), xBase, sliderY + 25);
 
-	ofPopStyle();
+    ofPopStyle();
 }
 
 void ofApp::mousePressed(int x, int y, int button) {
-	if (isLive) {
-		float xStart = 15;
-		float yBase = ofGetHeight() - 220 - 20;
-		float sliderY = yBase + 150 + 30;
-		float sliderWidth = 164;
+    if (isLive) {
+        float xStart = 15;
+        float yBase = ofGetHeight() - 220 - 20;
+        float sliderY = yBase + 150 + 30;
+        float sliderWidth = 164;
 
-		if (x >= xStart && x <= xStart + sliderWidth && y >= sliderY && y <= sliderY + 15) {
-			sldAudioGain = ofMap(x, xStart, xStart + sliderWidth, 0.0, 5.0, true);
-		}
-	}
+        if (x >= xStart && x <= xStart + sliderWidth && y >= sliderY && y <= sliderY + 15) {
+            sldAudioGain = ofMap(x, xStart, xStart + sliderWidth, 0.0, 5.0, true);
+        }
+    }
 }
 
 void ofApp::mouseDragged(int x, int y, int button) {
-	if (isLive) {
-		float xStart = 15;
-		float yBase = ofGetHeight() - 220 - 20;
-		float sliderY = yBase + 150 + 30;
-		float sliderWidth = 164;
+    if (isLive) {
+        float xStart = 15;
+        float yBase = ofGetHeight() - 220 - 20;
+        float sliderY = yBase + 150 + 30;
+        float sliderWidth = 164;
 
-		if (x >= xStart && x <= xStart + sliderWidth && y >= sliderY && y <= sliderY + 15) {
-			sldAudioGain = ofMap(x, xStart, xStart + sliderWidth, 0.0, 5.0, true);
-		}
-	}
+        if (x >= xStart && x <= xStart + sliderWidth && y >= sliderY && y <= sliderY + 15) {
+            sldAudioGain = ofMap(x, xStart, xStart + sliderWidth, 0.0, 5.0, true);
+        }
+    }
 }
 
 void ofApp::loadRandomVideo() {
-	if (bIsLoading || videoFiles.empty()) return;
-	
-	// Force the hardware decoder to release the last file completely
-	if (video.isLoaded()) {
-		video.closeMovie();
-	}
-	video.stop();
+    if (videoFiles.empty()) return;
+    
+    // Release hardware decoder resources
+    video.stop();
+    if (video.isLoaded()) {
+        video.closeMovie();
+    }
 
-	bIsLoading = true;
-	bPendingLoad = false;
-	int idx = floor(ofRandom(videoFiles.size()));
-	
-	#ifdef TARGET_OSX
-		video.loadAsync(videoFiles[idx]);
-	#else
-		video.load(videoFiles[idx]);
-	#endif
-	
-	ofLogNotice() << "STARTING ASYNC LOAD: " << videoFiles[idx];
+    bIsLoading = false;
+    bPendingLoad = false;
+    int idx = floor(ofRandom(videoFiles.size()));
+
+    bool loaded = video.load(videoFiles[idx]);
+    if (!loaded) {
+        ofLogError() << "FAILED TO LOAD VIDEO: " << videoFiles[idx];
+        return;
+    }
+
+    video.setLoopState(OF_LOOP_NONE);
+    video.play();
+    ofLogNotice() << "STARTING VIDEO: " << videoFiles[idx];
 }
