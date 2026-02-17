@@ -107,6 +107,14 @@ bool ofApp::startLiveSession(bool allowVideoLoad) {
 
 void ofApp::setup() {
     ofSetBackgroundAuto(false);
+
+	// Set path for OSX release version
+	#ifdef TARGET_OSX
+		#ifndef DEBUG
+			ofSetDataPathRoot("../Resources/data/");
+		#endif
+	#endif
+
     shader.load("shader.vert", "shader.frag");
     
     // Setup the "Live" GUI (the one seen while VJing)

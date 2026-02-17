@@ -38,6 +38,7 @@
 		"C2B8EF34-1DE4-4EC9-9537-49790F8B5EC2" /* ofxLabel.cpp in Sources */ = {isa = PBXBuildFile; fileRef = "416CA148-4B60-47BB-8D24-24F676A1A5E5" /* ofxLabel.cpp */; };
 		"CDF064CD-F00C-4192-9B62-58174AF40568" /* ofxToggle.cpp in Sources */ = {isa = PBXBuildFile; fileRef = "04B174CC-9A72-4B66-AACD-CBB831CBD62E" /* ofxToggle.cpp */; };
 		"D148CE4D-2EEA-455A-8474-4136FA533D72" /* ofxColorPicker.cpp in Sources */ = {isa = PBXBuildFile; fileRef = "FF831461-76C7-411B-A4D4-81DFA1270E20" /* ofxColorPicker.cpp */; };
+		D7DEA4E12F45143200046B0C /* data in CopyFiles */ = {isa = PBXBuildFile; fileRef = "60AFBE63-9748-4798-966C-DAD78F1351C6" /* data */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		"D8220D86-315B-4402-A3F1-4D1128F2C1D3" /* RGBShiftPass.cpp in Sources */ = {isa = PBXBuildFile; fileRef = "87AD3FC0-D357-4EAD-999D-1952309AC846" /* RGBShiftPass.cpp */; };
 		"D8B35A96-F057-43C5-ADE3-8AF1DDE7444B" /* ContrastPass.cpp in Sources */ = {isa = PBXBuildFile; fileRef = "1FA88A0B-6144-499D-AF50-BB1E79E0DC4C" /* ContrastPass.cpp */; };
 		"D9C6AB44-660F-4B99-A167-015A8046FBA6" /* ZoomBlurPass.cpp in Sources */ = {isa = PBXBuildFile; fileRef = "B8EE3C28-7373-458F-A6D5-6C57ADDCA8F0" /* ZoomBlurPass.cpp */; };
@@ -69,8 +70,9 @@
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
-			dstSubfolderSpec = 10;
+			dstSubfolderSpec = 7;
 			files = (
+				D7DEA4E12F45143200046B0C /* data in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
