@@ -53,6 +53,8 @@ public:
 	float hueValue = 0;
 
 	float smoothedLowMids = 0.0f; // used to count headroom
+	float smoothedRGBShift = 0.0f; // Stores the decaying RGB bloom value
+    bool invertActive = false;      // Tracks if the sub-bass inversion is triggered
 
 	// Video Handling
 	ofVideoPlayer video;

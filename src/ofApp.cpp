@@ -293,13 +293,52 @@ void ofApp::update() {
 
     video.update();
 
-    // Visual Smoothing Math
+    // --- IMPACT & STROBE LOGIC ---
     if (strobeTimer > 0) strobeTimer -= 0.1f;
-    float impactDelta = std::max(0.0f, lowMids - (smoothedLowMids + 0.1f));
+    
+    // Calculate how much the current bass hit exceeds the average
+    float impactDelta = std::max(0.0f, lowMids - (smoothedLowMids + 0.12f));
+    
+    // Trigger flash on significant peaks
     if (impactDelta > 0.45f) strobeTimer = 1.0f;
 
+    // --- ENVELOPE ZOOM & RGB LOGIC ---
+    // Ignore tiny volume fluctuations to prevent constant shivering
+    float cleanImpact = 0.0f;
+    if (impactDelta > 0.05f) {
+        // Map the impact to a usable range (0.0 to 1.0)
+        cleanImpact = ofMap(impactDelta, 0.05, 0.5, 0.0, 1.0, true);
+    }
+
+    // Define target values for Zoom and RGB Shift
+    float targetZoom = 1.0f + (cleanImpact * 0.35f);
+    float targetRGB = cleanImpact * 120.0f; // Maximum bloom for RGB shift
+
+    // Asymmetric Smoothing for Zoom
+    if (targetZoom > zoomValue) {
+        zoomValue = ofLerp(zoomValue, targetZoom, 0.4f); // Fast Attack
+    } else {
+        zoomValue = ofLerp(zoomValue, 1.0f, 0.08f);    // Slow Release
+    }
+
+	// Create a trigger for the invert that decays over time
+	//if (subBass > smoothedLowMids + 0.4f && strobeTimer <= 0.0f) {
+	//	invertActive = true; 
+	//} else {
+	//	invertActive = false;
+	//}
+
+    // Asymmetric Smoothing for RGB Shift (The RGB Fix)
+    // This prevents the color channels from flickering too aggressively
+    if (targetRGB > smoothedRGBShift) {
+        smoothedRGBShift = ofLerp(smoothedRGBShift, targetRGB, 0.5f); // Instant snap
+    } else {
+        smoothedRGBShift = ofLerp(smoothedRGBShift, 0.0f, 0.1f);      // Smooth fade
+    }
+
+    // --- GENERAL SMOOTHING ---
+    // Gradually update the baseline to follow long-term volume changes
     smoothedLowMids = ofLerp(smoothedLowMids, lowMids, 0.05f);
-    zoomValue = ofLerp(zoomValue, 1.0f + (impactDelta * 15.0f), 0.3f);
     smoothedHue = ofLerp(smoothedHue, hueValue, 0.05f);
 
     // End-of-video check and random reload
@@ -366,7 +405,7 @@ void ofApp::draw() {
     shader.setUniform1f("treble", treble);
     shader.setUniform1f("lowThresh", 0.10f); // Patterns trigger earlier
     shader.setUniform1f("highThresh", 0.80f); // Blocks trigger earlier
-    shader.setUniform2f("res", (float)ofGetWidth(), (float)ofGetHeight());
+	shader.setUniform2f("res", (float)video.getWidth(), (float)video.getHeight());
 
     // INVERT (High-bass trigger)
     bool subInvert = (subBass > 0.8f);
@@ -380,20 +419,29 @@ void ofApp::draw() {
     if (mids > 0.25) {
         int numSlices = (int)ofMap(mids, 0.25, 1.0, 16, 64, true);
         float maxShift = ofMap(mids, 0.25, 1.0, 0.5, 4.0, true);
-        float sliceHeight = (float)ofGetHeight() / numSlices;
-        float texSliceHeight = (float)video.getHeight() / numSlices;
+        
+        // Use video dimensions for math to prevent scaling drift
+        float sliceHeightDest = (float)ofGetHeight() / numSlices;
+        float sliceHeightSrc = (float)video.getHeight() / numSlices;
+        float halfW = (float)ofGetWidth() / 2.0;
+        float halfH = (float)ofGetHeight() / 2.0;
 
         for (int i = 0; i < numSlices; i++) {
             float xOffset = ofRandom(-maxShift, maxShift);
-            // Draw relative to negative half-width to keep it centered
+            
             video.getTexture().drawSubsection(
-                (-ofGetWidth() / 2) + xOffset, (-ofGetHeight() / 2) + (i * sliceHeight),
-                ofGetWidth(), sliceHeight,
-                0, i * texSliceHeight);
+                -halfW + xOffset,          // Destination X (Centered)
+                -halfH + (i * sliceHeightDest), // Destination Y (Centered)
+                ofGetWidth(),              // Destination Width
+                sliceHeightDest,           // Destination Height
+                0,                         // Source X
+                i * sliceHeightSrc,        // Source Y
+                video.getWidth(),          // Source Width
+                sliceHeightSrc             // Source Height
+            );
         }
     } else {
         ofSetColor(255);
-        // Draw centered at -w/2, -h/2
         video.getTexture().draw(-ofGetWidth()/2, -ofGetHeight()/2, ofGetWidth(), ofGetHeight());
     }
     shader.end();
