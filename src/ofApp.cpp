@@ -376,21 +376,24 @@ void ofApp::draw() {
     float br = ofMap(highMids, 0.2, 0.8, 150, 190, true);
     ofSetColor(ofColor::fromHsb(fmod(smoothedHue, 255.0), 160, br));
 
-    // SLICING
+	// SLICING
     if (mids > 0.25) {
         int numSlices = (int)ofMap(mids, 0.25, 1.0, 16, 64, true);
         float maxShift = ofMap(mids, 0.25, 1.0, 0.5, 4.0, true);
+        float sliceHeight = (float)ofGetHeight() / numSlices;
+        float texSliceHeight = (float)video.getHeight() / numSlices;
+
         for (int i = 0; i < numSlices; i++) {
             float xOffset = ofRandom(-maxShift, maxShift);
+            // Draw relative to negative half-width to keep it centered
             video.getTexture().drawSubsection(
-                -ofGetWidth() / 2 + xOffset, -ofGetHeight() / 2 + (i * (ofGetHeight() / numSlices)),
-                ofGetWidth(), ofGetHeight() / numSlices,
-                0, i * (video.getHeight() / numSlices));
+                (-ofGetWidth() / 2) + xOffset, (-ofGetHeight() / 2) + (i * sliceHeight),
+                ofGetWidth(), sliceHeight,
+                0, i * texSliceHeight);
         }
     } else {
-        // Draw full texture centered
         ofSetColor(255);
-        // Already translated to center, so offset from center point
+        // Draw centered at -w/2, -h/2
         video.getTexture().draw(-ofGetWidth()/2, -ofGetHeight()/2, ofGetWidth(), ofGetHeight());
     }
     shader.end();
