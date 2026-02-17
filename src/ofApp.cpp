@@ -93,8 +93,8 @@ bool ofApp::startLiveSession(bool allowVideoLoad) {
     settings.setInListener(this);
     settings.numInputChannels = (selectedDevice.inputChannels > 2) ? 2 : selectedDevice.inputChannels;
     settings.numOutputChannels = 0;
-    settings.sampleRate = 44100;
-    settings.bufferSize = 1024;
+	settings.sampleRate = selectedDevice.sampleRates.empty() ? 44100 : selectedDevice.sampleRates[0];
+	settings.bufferSize = 1024;
 
     if (soundStream.setup(settings)) {
         isLive = true;
