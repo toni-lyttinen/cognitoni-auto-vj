@@ -93,7 +93,13 @@ bool ofApp::startLiveSession(bool allowVideoLoad) {
     settings.setInListener(this);
     settings.numInputChannels = (selectedDevice.inputChannels > 2) ? 2 : selectedDevice.inputChannels;
     settings.numOutputChannels = 0;
-	settings.sampleRate = selectedDevice.sampleRates.empty() ? 44100 : selectedDevice.sampleRates[0];
+	#ifdef TARGET_WIN32
+		// Windows: Force 48000 to avoid the WASAPI Resampler lag (~150ms)
+		settings.sampleRate = 48000;
+	#else
+		// macOS/Other: Use the device's preferred rate or fallback to 44100
+		settings.sampleRate = selectedDevice.sampleRates.empty() ? 44100 : selectedDevice.sampleRates[0];
+	#endif
 	settings.bufferSize = 1024;
 
     if (soundStream.setup(settings)) {
@@ -592,5 +598,6 @@ void ofApp::loadRandomVideo() {
 
     video.setLoopState(OF_LOOP_NONE);
     video.play();
+	video.setVolume(0);
     ofLogNotice() << "STARTING VIDEO: " << videoFiles[idx];
 }
