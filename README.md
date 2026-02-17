@@ -1,5 +1,14 @@
 # Cognitoni Auto VJ - Real-time Audio Visualizer
 
+
+
+https://github.com/user-attachments/assets/3f1e9de5-d62e-4fac-959c-5831c84a2d86
+
+🎵 _Cognitoni - Bait_  
+🎬 _Bakemonogatari_
+
+
+
 An aggressive, shader-based video manipulation engine built with **openFrameworks**. This tool transforms standard video libraries into high-energy visuals by mapping real-time FFT frequency data to complex GLSL mosh patterns and geometric displacements.
 
 ---
@@ -80,6 +89,8 @@ The app cycles through these modes automatically to keep the visuals evolving:
 * **Audio:** Configure `ofSoundStream` for **ALSA** or **PulseAudio** depending on your distribution.
 * **Codecs:** Install `gstreamer-plugins-good`, `base`, and `ugly` to ensure MP4/MOV hardware acceleration.
 </details>
+
+**TODO**: Make built versions for each OS
 
 ---
 *Built with openFrameworks and GLSL.*
