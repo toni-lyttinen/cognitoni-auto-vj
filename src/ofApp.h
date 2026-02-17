@@ -2,6 +2,7 @@
 #include "ofMain.h"
 #include "ofxGui.h"
 #include "ofxFft.h"
+#include <atomic>
 
 class ofApp : public ofBaseApp {
 public:
@@ -45,11 +46,11 @@ public:
 	vector<float> fftBins;
 
 	// Frequencies (Used by Shader & Draw)
-	float subBass; // Deep thumps
-	float lowMids; // Kicks and bass guitar
-	float mids; // Vocals and snare
-	float highMids; // Lead instruments/shimmer
-	float treble; // Cymbals/sharp noise
+	std::atomic<float> subBass{0.0f}; // Deep thumps
+	std::atomic<float> lowMids{0.0f}; // Kicks and bass guitar
+	std::atomic<float> mids{0.0f}; // Vocals and snare
+	std::atomic<float> highMids{0.0f}; // Lead instruments/shimmer
+	std::atomic<float> treble{0.0f}; // Cymbals/sharp noise
 	float hueValue = 0;
 
 	float smoothedLowMids = 0.0f; // used to count headroom

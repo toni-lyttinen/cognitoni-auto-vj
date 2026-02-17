@@ -159,7 +159,10 @@ void ofApp::selectFolderPressed() {
 
         bPendingLoad = false;
         bIsLoading = false;
+        
+        // Use the reinforced texture cleanup
         video.stop();
+        video.setUseTexture(false); 
         if (video.isLoaded()) {
             video.closeMovie();
         }
@@ -274,7 +277,7 @@ void ofApp::audioIn(ofSoundBuffer & input) {
             counts[4]++;
         }
     }
-    // Blend band values with unique multipliers per frequency range
+    // Note: Atomicity is handled automatically during assignment
     subBass = ofLerp(subBass, (s / max(1, counts[0])) * 1.0f, 0.1f);
     lowMids = ofLerp(lowMids, (lm / max(1, counts[1])) * 1.8f, 0.1f);
     mids = ofLerp(mids, (m / max(1, counts[2])) * 2.5f, 0.1f);
@@ -297,7 +300,7 @@ void ofApp::update() {
     if (strobeTimer > 0) strobeTimer -= 0.1f;
     
     // Calculate how much the current bass hit exceeds the average
-    float impactDelta = std::max(0.0f, lowMids - (smoothedLowMids + 0.12f));
+    float impactDelta = std::max(0.0f, (float)lowMids - (smoothedLowMids + 0.12f));
     
     // Trigger flash on significant peaks
     if (impactDelta > 0.45f) strobeTimer = 1.0f;
@@ -338,7 +341,7 @@ void ofApp::update() {
 
     // --- GENERAL SMOOTHING ---
     // Gradually update the baseline to follow long-term volume changes
-    smoothedLowMids = ofLerp(smoothedLowMids, lowMids, 0.05f);
+    smoothedLowMids = ofLerp(smoothedLowMids, (float)lowMids, 0.05f);
     smoothedHue = ofLerp(smoothedHue, hueValue, 0.05f);
 
     // End-of-video check and random reload
@@ -376,7 +379,7 @@ void ofApp::draw() {
     if (!video.isLoaded() || !video.getTexture().isAllocated()) return;
 
     // IMPACT LOGIC
-    float impactDelta = std::max(0.0f, lowMids - (smoothedLowMids + 0.1f));
+    float impactDelta = std::max(0.0f, (float)lowMids - (smoothedLowMids + 0.1f));
 
     ofPushMatrix();
     ofTranslate(ofGetWidth() / 2, ofGetHeight() / 2);
@@ -405,7 +408,7 @@ void ofApp::draw() {
     shader.setUniform1f("treble", treble);
     shader.setUniform1f("lowThresh", 0.10f); // Patterns trigger earlier
     shader.setUniform1f("highThresh", 0.80f); // Blocks trigger earlier
-	shader.setUniform2f("res", (float)video.getWidth(), (float)video.getHeight());
+    shader.setUniform2f("res", (float)video.getWidth(), (float)video.getHeight());
 
     // INVERT (High-bass trigger)
     bool subInvert = (subBass > 0.8f);
@@ -415,7 +418,7 @@ void ofApp::draw() {
     float br = ofMap(highMids, 0.2, 0.8, 150, 190, true);
     ofSetColor(ofColor::fromHsb(fmod(smoothedHue, 255.0), 160, br));
 
-	// SLICING
+    // SLICING
     if (mids > 0.25) {
         int numSlices = (int)ofMap(mids, 0.25, 1.0, 16, 64, true);
         float maxShift = ofMap(mids, 0.25, 1.0, 0.5, 4.0, true);
@@ -498,7 +501,7 @@ void ofApp::drawVisualizerHUD() {
     float barGap = 6;
     float barYAnchor = yBase + maxBarH + 10; // Bottom of the bars 
 
-    float vals[] = { subBass, lowMids, mids, highMids, treble };
+    float vals[] = { (float)subBass, (float)lowMids, (float)mids, (float)highMids, (float)treble };
     ofColor colors[] = {
         ofColor(255, 80, 80), ofColor(255, 160, 50), ofColor(80, 255, 80),
         ofColor(80, 180, 255), ofColor(180, 80, 255)
@@ -560,8 +563,9 @@ void ofApp::mouseDragged(int x, int y, int button) {
 void ofApp::loadRandomVideo() {
     if (videoFiles.empty()) return;
     
-    // Release hardware decoder resources
+    // Release hardware decoder and GPU texture resources
     video.stop();
+    video.setUseTexture(false); // Force dump of the GPU texture handle
     if (video.isLoaded()) {
         video.closeMovie();
     }
@@ -570,6 +574,8 @@ void ofApp::loadRandomVideo() {
     bPendingLoad = false;
     int idx = floor(ofRandom(videoFiles.size()));
 
+    // Re-enable textures before loading new file
+    video.setUseTexture(true); 
     bool loaded = video.load(videoFiles[idx]);
     if (!loaded) {
         ofLogError() << "FAILED TO LOAD VIDEO: " << videoFiles[idx];
