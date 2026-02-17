@@ -60,12 +60,13 @@ The app cycles through these modes automatically to keep the visuals evolving:
 ## 🛠 Setup & Installation (TODO)
 
 <details>
-<summary><b>🍎 MacOS Setup (Verified)</b></summary>
+<summary><b>🍎 MacOS Setup</b></summary>
 
 * **IDEs:** Install **Visual Studio Code** & **Xcode**.
 * **Framework:** Download **openFrameworks** (macOS release) and unpack.
 * **Path Fix:** If the Project Generator fails, move it out of its folder and back in to reset relative paths.
-* **Required Addons:** * `ofxGui` (Core - usually auto-added by Project Generator)
+* **Required Addons:** 
+    * `ofxGui` (Core - usually auto-added by Project Generator)
     * `ofxFft` (External - requires `fftw` library)
     * `ofxPostProcessing` (External - used for GLSL stack effects)
 * **Importing:** Use the **projectGenerator** to "Import" the folder, then open the generated `.xcodeproj` file.
@@ -76,10 +77,19 @@ The app cycles through these modes automatically to keep the visuals evolving:
 <details>
 <summary><b>🪟 Windows Setup (TODO)</b></summary>
 
-* **IDE:** Install **Visual Studio 2022** (Community Edition).
+* **IDE:** Install **Visual Studio 2022** (Community Edition) with the **"Desktop development with C++"** workload.
+* **openFrameworks:** Use the **VS (MSVC)** release and unzip to a short path (e.g., `C:\of_v0.12.1`).
+* **Required Addons:** 
+    * `ofxGui` (Core - usually auto-added by Project Generator)
+    * `ofxFft` (External - requires `fftw` library)
+    * `ofxPostProcessing` (External - used for GLSL stack effects)
+* **Importing:** Use the **projectGenerator** to "Import" the folder to generate the `.sln` file.
+* **Linker Fix:** Add `legacy_stdio_definitions.lib` to **Project Properties > Linker > Input > Additional Dependencies** to fix the `std_search` error.
 * **Audio API:** Change the setup logic to use `ofSoundDevice::Api::MS_WASAPI`.
+* **Latency Fix:** Hardcode `settings.sampleRate = 48000;` in `startLiveSession` to match Windows system defaults and eliminate the 150ms delay.
 * **Performance:** Use `video.setPixelFormat(OF_PIXELS_NATIVE)` to allow the GPU to handle decoding more efficiently.
-* **FFT:** Ensure the `fftw` dll files are present in the `bin` folder for the app to launch.
+* **FFT:** Ensure the `libfftw3f-3.dll` file is present in the `bin` folder for the app to launch.
+* **Redistributables:** Copy `fmod.dll`, `FreeImage.dll`, and `glfw3.dll` from the OF `export` folder into your `bin` folder.
 </details>
 
 <details>
