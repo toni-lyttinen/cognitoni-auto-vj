@@ -84,12 +84,7 @@ The app cycles through these modes automatically to keep the visuals evolving:
     * `ofxFft` (External - requires `fftw` library)
     * `ofxPostProcessing` (External - used for GLSL stack effects)
 * **Importing:** Use the **projectGenerator** to "Import" the folder to generate the `.sln` file.
-* **Linker Fix:** Add `legacy_stdio_definitions.lib` to **Project Properties > Linker > Input > Additional Dependencies** to fix the `std_search` error.
-* **Audio API:** Change the setup logic to use `ofSoundDevice::Api::MS_WASAPI`.
-* **Latency Fix:** Hardcode `settings.sampleRate = 48000;` in `startLiveSession` to match Windows system defaults and eliminate the 150ms delay.
-* **Performance:** Use `video.setPixelFormat(OF_PIXELS_NATIVE)` to allow the GPU to handle decoding more efficiently.
-* **FFT:** Ensure the `libfftw3f-3.dll` file is present in the `bin` folder for the app to launch.
-* **Redistributables:** Copy `fmod.dll`, `FreeImage.dll`, and `glfw3.dll` from the OF `export` folder into your `bin` folder.
+* **Linker Fix:** Add `legacy_stdio_definitions.lib` to **Project Properties > Linker > Input > Additional Dependencies** to fix the `std_search` error. The Linker gave me a lot of headache so might need something else configured aswell. Will update later if I have the time to go setup again.
 </details>
 
 <details>
