@@ -62,7 +62,7 @@ The app cycles through these modes automatically to keep the visuals evolving:
 <details>
 <summary><b>🍎 MacOS Setup</b></summary>
 
-* **IDEs:** Install **Visual Studio Code** & **Xcode**.
+* **IDEs:** Install **Xcode**.
 * **Framework:** Download **openFrameworks** (macOS release) and unpack.
 * **Path Fix:** If the Project Generator fails, move it out of its folder and back in to reset relative paths.
 * **Required Addons:** 
