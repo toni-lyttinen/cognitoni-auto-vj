@@ -13,6 +13,12 @@ An aggressive, shader-based video manipulation engine built with **openFramework
 
 ---
 
+## 📥 Download
+
+Get the latest build for your OS from the link below:
+
+**[Download Cognitoni Auto VJ v0.1.0-alpha](https://github.com/toni-lyttinen/cognitoni-auto-vj/releases/tag/v0.1.0-alpha)**
+
 ## 🚀 Getting Started
 
 ### 1. Select Video Folder
